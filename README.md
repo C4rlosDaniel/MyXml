@@ -98,6 +98,13 @@ A integração com Supabase e SEFAZ está preparada nos serviços e na API.
 Os arquivos `supabase/seed_test_users.sql` e `seed_demo_data.sql` documentam o que
 foi inserido (dados de demonstração — remover antes de uso real).
 
+### Gerar licença pelo painel
+
+Admin → **Licenças → Gerar licença**: informe nome, e-mail, senha, perfil e prazo.
+A API cria o usuário no Supabase Auth (service role), o trigger cria perfil e
+licença, e a licença já fica `ativa` com `valid_until` calculado. E-mail duplicado
+retorna `409`.
+
 ## Fase 1 — ativação do Supabase (checklist)
 
 1. **Rotacione** as chaves que foram enviadas por chat (GitHub, Vercel, Supabase).
