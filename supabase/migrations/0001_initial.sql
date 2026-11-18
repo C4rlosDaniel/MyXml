@@ -1,5 +1,5 @@
 -- ============================================================
--- MyFly — schema inicial (Etapa 1)
+-- MyXml — schema inicial (Etapa 1)
 -- Banco: Supabase Postgres. Executar com `supabase db push`.
 -- Nenhum dado legado é importado: estrutura nova, do zero.
 -- ============================================================
@@ -272,6 +272,6 @@ on conflict (id) do nothing;
 -- 2) No SQL Editor:
 --      update public.profiles set role = 'admin' where email... -- profiles não tem email;
 --      use: update public.profiles set role = 'admin'
---           where id = (select id from auth.users where email = 'admin@myfly.com.br');
+--           where id = (select id from auth.users where email = 'admin@myxml.com.br');
 --    e:  update public.licenses set status = 'ativo'
---        where user_id = (select id from auth.users where email = 'admin@myfly.com.br');
+--        where user_id = (select id from auth.users where email = 'admin@myxml.com.br');

@@ -5,13 +5,13 @@ import { isMockMode } from '@/services/config'
 
 export function SettingsPage() {
   const { success, info } = useToast()
-  const [serie, setSerie] = useState(localStorage.getItem('myfly-serie') ?? '1')
-  const [proximoNumero, setProximoNumero] = useState(localStorage.getItem('myfly-numero') ?? '100')
+  const [serie, setSerie] = useState(localStorage.getItem('myxml-serie') ?? '1')
+  const [proximoNumero, setProximoNumero] = useState(localStorage.getItem('myxml-numero') ?? '100')
   const [ambiente, setAmbiente] = useState<'homologacao' | 'producao'>('homologacao')
 
   const save = () => {
-    localStorage.setItem('myfly-serie', serie)
-    localStorage.setItem('myfly-numero', proximoNumero)
+    localStorage.setItem('myxml-serie', serie)
+    localStorage.setItem('myxml-numero', proximoNumero)
     success('Configurações salvas nesta demonstração.')
   }
 
@@ -71,7 +71,7 @@ export function SettingsPage() {
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-txt-primary">Sobre</h2>
           <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between"><dt className="text-txt-muted">Sistema</dt><dd className="font-medium text-txt-primary">MyFly Web 0.1.0</dd></div>
+            <div className="flex justify-between"><dt className="text-txt-muted">Sistema</dt><dd className="font-medium text-txt-primary">MyXml Web 0.1.0</dd></div>
             <div className="flex justify-between"><dt className="text-txt-muted">Modelo</dt><dd className="font-medium text-txt-primary">NFC-e (65)</dd></div>
             <div className="flex justify-between"><dt className="text-txt-muted">Modo</dt><dd className="font-medium text-txt-primary">{isMockMode ? 'Demonstração' : 'Conectado'}</dd></div>
           </dl>

@@ -33,7 +33,7 @@ export function LoginPage() {
   const onSubmit = async (data: FormData) => {
     try {
       await signIn(data.email, data.password)
-      success('Bem-vindo de volta!', 'Acesso liberado ao painel MyFly.')
+      success('Bem-vindo de volta!', 'Acesso liberado ao painel MyXml.')
       navigate('/', { replace: true })
     } catch (err) {
       showError('Não foi possível entrar', err instanceof Error ? err.message : 'Tente novamente.')
@@ -115,7 +115,7 @@ export function LoginPage() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => quickLogin('admin@myfly.com.br', 'admin123')}
+                onClick={() => quickLogin('admin@myxml.com.br', 'admin123')}
               >
                 Entrar como admin
               </Button>
@@ -123,7 +123,7 @@ export function LoginPage() {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => quickLogin('contador@myfly.com.br', 'contador123')}
+                onClick={() => quickLogin('contador@myxml.com.br', 'contador123')}
               >
                 Entrar como contador
               </Button>

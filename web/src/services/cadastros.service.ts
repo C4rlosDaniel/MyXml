@@ -44,9 +44,9 @@ let companies: CompanyRecord[] = [
 ]
 
 const runs: RunRecord[] = [
-  { id: 'run-1', companyId: 'co-1', company: 'Villa Santa Maria', period: '10/2026', startedAt: '2026-11-01T08:30:00', status: 'concluido', downloaded: 128, errors: 0, user: 'contador@myfly.com.br' },
-  { id: 'run-2', companyId: 'co-1', company: 'Villa Santa Maria', period: '09/2026', startedAt: '2026-10-01T09:12:00', status: 'com_erros', downloaded: 96, errors: 2, user: 'contador@myfly.com.br' },
-  { id: 'run-3', companyId: 'co-1', company: 'Villa Santa Maria', period: '08/2026', startedAt: '2026-09-01T08:05:00', status: 'concluido', downloaded: 110, errors: 0, user: 'admin@myfly.com.br' },
+  { id: 'run-1', companyId: 'co-1', company: 'Villa Santa Maria', period: '10/2026', startedAt: '2026-11-01T08:30:00', status: 'concluido', downloaded: 128, errors: 0, user: 'contador@myxml.com.br' },
+  { id: 'run-2', companyId: 'co-1', company: 'Villa Santa Maria', period: '09/2026', startedAt: '2026-10-01T09:12:00', status: 'com_erros', downloaded: 96, errors: 2, user: 'contador@myxml.com.br' },
+  { id: 'run-3', companyId: 'co-1', company: 'Villa Santa Maria', period: '08/2026', startedAt: '2026-09-01T08:05:00', status: 'concluido', downloaded: 110, errors: 0, user: 'admin@myxml.com.br' },
 ]
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

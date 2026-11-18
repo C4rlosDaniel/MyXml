@@ -67,8 +67,8 @@ function ThemeToggle() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    localStorage.setItem('myfly-theme', theme)
-    localStorage.setItem('myfly-theme-v2', '1')
+    localStorage.setItem('myxml-theme', theme)
+    localStorage.setItem('myxml-theme-v2', '1')
   }, [theme])
 
   return (
@@ -88,13 +88,13 @@ export function AppShell() {
   const { companies, selectedCompany, selectedCompanyId, selectCompany } = useCompany()
   const navigate = useNavigate()
   const location = useLocation()
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('myfly-sidebar') === 'collapsed')
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('myxml-sidebar') === 'collapsed')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const lastG = useRef(0)
 
   useEffect(() => {
-    localStorage.setItem('myfly-sidebar', collapsed ? 'collapsed' : 'expanded')
+    localStorage.setItem('myxml-sidebar', collapsed ? 'collapsed' : 'expanded')
   }, [collapsed])
 
   const navGroups = useMemo<NavGroup[]>(

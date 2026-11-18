@@ -1,1 +1,1 @@
-"""MyFly API — camada de serviços da versão web."""
+"""MyXml API — camada de serviços da versão web."""

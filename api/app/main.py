@@ -1,4 +1,4 @@
-"""Ponto de entrada da API MyFly."""
+"""Ponto de entrada da API MyXml."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from app.config import settings
 from app.routers import auth, download, empresas, health, licenses, notes
 
 app = FastAPI(
-    title="MyFly API",
+    title="MyXml API",
     version="0.1.0",
     description="Camada de serviços da versão web — regras fiscais permanecem no backend.",
 )

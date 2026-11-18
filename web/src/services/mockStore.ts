@@ -30,7 +30,7 @@ interface MockDatabase {
   sessionUserId: string | null
 }
 
-const STORAGE_KEY = 'myfly_mock_v1'
+const STORAGE_KEY = 'myxml_mock_v1'
 
 function seed(): MockDatabase {
   const now = new Date().toISOString()
@@ -38,14 +38,14 @@ function seed(): MockDatabase {
     users: [
       {
         id: '00000000-0000-0000-0000-000000000001',
-        email: 'admin@myfly.com.br',
+        email: 'admin@myxml.com.br',
         password: 'admin123',
-        fullName: 'Administrador MyFly',
+        fullName: 'Administrador MyXml',
         role: 'admin',
       },
       {
         id: '00000000-0000-0000-0000-000000000002',
-        email: 'contador@myfly.com.br',
+        email: 'contador@myxml.com.br',
         password: 'contador123',
         fullName: 'Contador Demo',
         role: 'contador',

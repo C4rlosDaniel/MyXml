@@ -21,9 +21,9 @@ async def get_current_user(
     if settings.mock_mode:
         return {
             "id": "00000000-0000-0000-0000-000000000001",
-            "email": "admin@myfly.com.br",
+            "email": "admin@myxml.com.br",
             "role": "admin",
-            "name": "Administrador MyFly (mock)",
+            "name": "Administrador MyXml (mock)",
         }
 
     if not authorization or not authorization.startswith("Bearer "):

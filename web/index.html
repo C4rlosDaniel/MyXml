@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f7f8fa" />
-    <meta name="description" content="MyFly — gestão de notas fiscais na nuvem" />
+    <meta name="description" content="MyXml — gestão de notas fiscais na nuvem" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <script>
       // Migração única: versões antigas gravaram tema escuro. O padrão é claro.
       try {
-        if (!localStorage.getItem('myfly-theme-v2')) {
-          localStorage.removeItem('myfly-theme');
-          localStorage.setItem('myfly-theme-v2', '1');
+        if (!localStorage.getItem('myxml-theme-v2')) {
+          localStorage.removeItem('myxml-theme');
+          localStorage.setItem('myxml-theme-v2', '1');
         }
         document.documentElement.dataset.theme = 'light';
       } catch (e) {}
@@ -22,7 +22,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <title>MyFly — Notas fiscais</title>
+    <title>MyXml — Notas fiscais</title>
   </head>
   <body>
     <div id="root"></div>

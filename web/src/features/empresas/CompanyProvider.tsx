@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { cadastrosService, type CompanyRecord } from '@/services/cadastros.service'
 
-const STORAGE_KEY = 'myfly-company'
+const STORAGE_KEY = 'myxml-company'
 
 interface CompanyContextValue {
   companies: CompanyRecord[]

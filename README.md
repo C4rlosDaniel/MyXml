@@ -1,4 +1,4 @@
-# MyFly — versão web
+# MyXml — versão web
 
 Reestruturação do antigo app desktop **Baixar NFC-e** para uma aplicação web
 100% em nuvem. Escopo: **baixar/gestionar NFC-e** — não há emissão de notas,
@@ -35,8 +35,8 @@ Abra `http://localhost:5173`.
 
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Admin | `admin@myfly.com.br` | `admin123` |
-| Contador | `contador@myfly.com.br` | `contador123` |
+| Admin | `admin@myxml.com.br` | `admin123` |
+| Contador | `contador@myxml.com.br` | `contador123` |
 
 O contador começa com licença **pendente** — entre como admin em outra aba,
 abra **Licenças** e autorize para testar o fluxo completo.
@@ -80,7 +80,7 @@ A integração com Supabase e SEFAZ está preparada nos serviços e na API.
 
 ## Deploy
 
-- Front publicado na Vercel: **https://myfly-rho.vercel.app**
+- Front publicado na Vercel: **https://myfly-rho.vercel.app** (URL do projeto criado na Vercel)
 - `web/vercel.json` configura Vite + rewrites de SPA.
 - Variáveis de ambiente `VITE_*` cadastradas no projeto da Vercel.
 - `VITE_FORCE_MOCK=true` mantém o demo funcionando até o Supabase ser ativado.

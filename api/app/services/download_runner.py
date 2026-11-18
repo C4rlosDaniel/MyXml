@@ -80,7 +80,7 @@ def executar(job_id: str) -> None:
                 ultimo_progresso = percentual
                 _atualizar_job(job_id, progresso=percentual)
 
-        with tempfile.TemporaryDirectory(prefix="myfly-nfce-") as temp:
+        with tempfile.TemporaryDirectory(prefix="myxml-nfce-") as temp:
             pasta = Path(temp)
             resultado = downloader.baixar_periodo(
                 cnpj="",
@@ -198,7 +198,7 @@ def gerar_excel(job_id: str) -> tuple[str, Path]:
         or {}
     )
 
-    destino = Path(tempfile.gettempdir()) / f"myfly-{job_id}.xlsx"
+    destino = Path(tempfile.gettempdir()) / f"myxml-{job_id}.xlsx"
     excel.exportar(
         destino,
         empresa_nome=str(company.get("razao_social", "")),

@@ -34,8 +34,8 @@ export default function App() {
   useEffect(() => {
     if (!profile) {
       document.documentElement.dataset.theme = 'light'
-      localStorage.setItem('myfly-theme', 'light')
-      localStorage.setItem('myfly-theme-v2', '1')
+      localStorage.setItem('myxml-theme', 'light')
+      localStorage.setItem('myxml-theme-v2', '1')
       clearToasts()
     }
   }, [profile, clearToasts])

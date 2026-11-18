@@ -1,5 +1,5 @@
 -- ============================================================
--- MyFly — cofre de certificados e progresso dos jobs
+-- MyXml — cofre de certificados e progresso dos jobs
 -- ============================================================
 
 -- Cofre: apenas a API (service role) acessa; sem política para clientes.
