@@ -59,14 +59,14 @@ const mapCompany = (row: Record<string, unknown>): CompanyRecord => ({
 
 const mapRun = (row: Record<string, unknown>): RunRecord => {
   const company = row.companies as { razao_social?: string; nome_exibicao?: string } | null
-  const user = row.profiles as { email?: string } | null
+  const user = row.profiles as { full_name?: string } | null
   return {
     id: String(row.id), companyId: String(row.company_id ?? ''),
     company: String(company?.nome_exibicao ?? company?.razao_social ?? ''),
     period: String(row.periodo_ini ?? ''), startedAt: String(row.started_at ?? ''),
     status: String(row.status ?? 'executando') as RunRecord['status'],
     downloaded: Number(row.baixadas ?? 0), errors: Number(row.erros ?? 0),
-    user: String(user?.email ?? ''),
+    user: String(user?.full_name ?? ''),
   }
 }
 
@@ -109,7 +109,7 @@ export const cadastrosService = {
     if (live()) {
       const { data, error } = await supabase!
         .from('download_runs')
-        .select('*, companies(razao_social, nome_exibicao), profiles(email)')
+        .select('*, companies(razao_social, nome_exibicao), profiles(full_name)')
         .order('started_at', { ascending: false })
       if (error) throw new Error('Não foi possível carregar o histórico.')
       return (data ?? []).map((row) => mapRun(row as Record<string, unknown>))

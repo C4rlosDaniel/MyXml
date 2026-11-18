@@ -79,7 +79,7 @@ def status_download(job_id: str, user: dict = Depends(get_current_user)) -> dict
     client = get_supabase_admin()
     response = (
         client.from_("download_runs")
-        .select("*, companies(razao_social), profiles(email)")
+        .select("*, companies(razao_social, nome_exibicao)")
         .eq("id", job_id)
         .maybe_single()
         .execute()
