@@ -1,4 +1,4 @@
-app = 'myxml-api'
+app = 'myxml'
 primary_region = 'gru'
 
 [build]

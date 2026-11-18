@@ -80,14 +80,23 @@ A integração com Supabase e SEFAZ está preparada nos serviços e na API.
 
 ## Deploy
 
-- Front publicado na Vercel: **https://myfly-rho.vercel.app** (URL do projeto criado na Vercel)
-- `web/vercel.json` configura Vite + rewrites de SPA.
-- Variáveis de ambiente `VITE_*` cadastradas no projeto da Vercel.
-- `VITE_FORCE_MOCK=true` mantém o demo funcionando até o Supabase ser ativado.
-- Deploy manual: `cd web && vercel --prod`. (A conexão Git automática falhou por
-  permissão do GitHub na conta da Vercel — pode ser feita pelo dashboard.)
-- API FastAPI preparada para **Fly.io** (`api/fly.toml` + `api/Dockerfile`, região GRU).
-  Deploy: `flyctl deploy` dentro de `api/`, com os secrets configurados.
+- Front: **https://myfly-rho.vercel.app** (URL do projeto criado na Vercel)
+- API: **https://myxml.fly.dev/health** → `{"status":"ok","mode":"live"}`
+- `web/vercel.json` configura Vite + rewrites de SPA. Variáveis `VITE_*` já
+  apontam para a API na Fly, com `VITE_FORCE_MOCK=false`.
+- Deploy manual: `cd web && vercel --prod` / `cd api && flyctl deploy`.
+- Banco Supabase **MyXml** com as 4 migrations aplicadas, grants corrigidos
+  (`0004_grants.sql`), usuários de teste e empresa/notas de demonstração.
+
+### Usuários de teste
+
+| Perfil | E-mail | Senha |
+|---|---|---|
+| Admin | `admin@myxml.com.br` | `admin123` |
+| Contador | `contador@myxml.com.br` | `contador123` |
+
+Os arquivos `supabase/seed_test_users.sql` e `seed_demo_data.sql` documentam o que
+foi inserido (dados de demonstração — remover antes de uso real).
 
 ## Fase 1 — ativação do Supabase (checklist)
 
