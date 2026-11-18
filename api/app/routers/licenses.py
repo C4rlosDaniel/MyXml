@@ -1,12 +1,83 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.schemas.license import LicenseOut, LicenseUpdateIn, MessageOut
+from app.config import settings
+from app.schemas.license import LicenseCreateIn, LicenseOut, LicenseUpdateIn, MessageOut
 from app.security import admin_required, get_current_user
 from app.services import license_service
+from app.services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/licenses", tags=["licenses"])
+
+
+@router.post("", response_model=LicenseOut, status_code=201)
+async def criar_usuario_licenca(
+    payload: LicenseCreateIn,
+    admin: dict = Depends(admin_required),
+) -> dict:
+    """Cria o usuário no Supabase Auth e já libera a licença pelo prazo informado."""
+    if settings.mock_mode:
+        raise HTTPException(status_code=501, detail="Configure o Supabase para criar usuários.")
+
+    client = get_supabase_admin()
+    try:
+        response = client.auth.admin.create_user({
+            "email": payload.email,
+            "password": payload.password,
+            "email_confirm": True,
+            "user_metadata": {
+                "role": payload.role,
+                "full_name": payload.full_name,
+            },
+        })
+    except Exception as exc:  # noqa: BLE001 - erro do provedor de auth
+        texto = str(exc).lower()
+        if "already" in texto or "registered" in texto or "existe" in texto:
+            raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail.") from exc
+        raise HTTPException(
+            status_code=400,
+            detail=f"Não foi possível criar o usuário: {exc}",
+        ) from exc
+
+    user = response.user
+    if user is None:
+        raise HTTPException(status_code=400, detail="O provedor não retornou o usuário criado.")
+
+    valid_until = (datetime.now(timezone.utc) + timedelta(days=payload.days)).isoformat()
+    # O trigger handle_new_user cria profile + licença; aqui apenas ativamos.
+    client.from_("licenses").update({
+        "status": "ativo",
+        "valid_until": valid_until,
+        "activated_by": admin["id"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("user_id", user.id).execute()
+
+    row = (
+        client.from_("licenses")
+        .select("*, profiles!licenses_user_id_fkey(full_name, email)")
+        .eq("user_id", user.id)
+        .maybe_single()
+        .execute()
+        .data
+    )
+    if not row:
+        raise HTTPException(status_code=500, detail="Usuário criado, mas a licença não foi encontrada.")
+
+    profile = row.get("profiles") or {}
+    return {
+        "id": str(row["id"]),
+        "user_id": str(row["user_id"]),
+        "user_name": str(profile.get("full_name", payload.full_name)),
+        "user_email": str(profile.get("email", payload.email)),
+        "status": row["status"],
+        "valid_until": row.get("valid_until"),
+        "activated_by": row.get("activated_by"),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
 
 
 @router.get("/me", response_model=LicenseOut | None)

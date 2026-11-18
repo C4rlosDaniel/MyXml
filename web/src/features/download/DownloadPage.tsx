@@ -1,4 +1,4 @@
-import { Download, FileSpreadsheet, FolderOpen, Play } from 'lucide-react'
+import { Download, FileSpreadsheet, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Card, useToast } from '@/design-system'
 import { useCompany } from '@/features/empresas/CompanyProvider'
@@ -6,13 +6,6 @@ import { isApiConfigured } from '@/services/config'
 import { cadastrosService, type CompanyRecord } from '@/services/cadastros.service'
 
 type OutputMode = 'excel' | 'xml' | 'both'
-
-type DirectoryHandleLike = {
-  name: string
-  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<{
-    createWritable: () => Promise<{ write: (data: string) => Promise<void>; close: () => Promise<void> }>
-  }>
-}
 
 const sampleXml = (number: string) => `<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
@@ -28,15 +21,12 @@ export function DownloadPage() {
   const [companyId, setCompanyId] = useState(selectedCompanyId ?? '')
   const [period, setPeriod] = useState('')
   const [outputMode, setOutputMode] = useState<OutputMode>('excel')
-  const [folderName, setFolderName] = useState('')
-  const [folderPath, setFolderPath] = useState('')
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [log, setLog] = useState<string[]>([])
   const timer = useRef<number | null>(null)
   const pollTimer = useRef<number | null>(null)
   const jobIdRef = useRef<string | null>(null)
-  const folderHandle = useRef<DirectoryHandleLike | null>(null)
 
   useEffect(() => {
     cadastrosService.listCompanies().then((data) => {
@@ -56,51 +46,26 @@ export function DownloadPage() {
     if (pollTimer.current) window.clearInterval(pollTimer.current)
   }, [])
 
-  const chooseFolder = async () => {
-    const picker = (window as unknown as { showDirectoryPicker?: () => Promise<DirectoryHandleLike> }).showDirectoryPicker
-    if (!picker) {
-      info('Navegador sem seletor de pasta', 'Informe o caminho desejado no campo abaixo.')
-      return
-    }
-    try {
-      const handle = await picker()
-      folderHandle.current = handle
-      setFolderName(handle.name)
-      success('Pasta selecionada!', handle.name)
-    } catch {
-      info('Seleção cancelada.')
-    }
-  }
-
   const saveXmls = async () => {
-    // TODO: no backend, gerar os XMLs reais do Supabase Storage e devolver um .zip
+    // TODO: no backend, gerar os XMLs reais do Supabase Storage e devolver um .zip.
+    // Por padrão o navegador salva tudo na pasta Downloads do usuário.
     const files = [
       { name: `NFCe-${period}-001.xml`, content: sampleXml('001') },
       { name: `NFCe-${period}-002.xml`, content: sampleXml('002') },
       { name: `NFCe-${period}-003.xml`, content: sampleXml('003') },
     ]
     try {
-      if (folderHandle.current) {
-        for (const file of files) {
-          const handle = await folderHandle.current.getFileHandle(file.name, { create: true })
-          const writable = await handle.createWritable()
-          await writable.write(file.content)
-          await writable.close()
-        }
-        success('XMLs salvos!', `${files.length} arquivos em ${folderName}.`)
-      } else {
-        files.forEach((file) => {
-          const url = URL.createObjectURL(new Blob([file.content], { type: 'application/xml' }))
-          const anchor = document.createElement('a')
-          anchor.href = url
-          anchor.download = file.name
-          anchor.click()
-          URL.revokeObjectURL(url)
-        })
-        success('XMLs enviados para download!', 'Escolha o destino na janela do navegador.')
-      }
+      files.forEach((file) => {
+        const url = URL.createObjectURL(new Blob([file.content], { type: 'application/xml' }))
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = file.name
+        anchor.click()
+        URL.revokeObjectURL(url)
+      })
+      success('XMLs baixados!', `${files.length} arquivos enviados para a pasta Downloads.`)
     } catch (err) {
-      showError('Não foi possível salvar os XMLs', err instanceof Error ? err.message : undefined)
+      showError('Não foi possível baixar os XMLs', err instanceof Error ? err.message : undefined)
     }
   }
 
@@ -199,7 +164,7 @@ export function DownloadPage() {
               <div className="space-y-2">
                 {([
                   { value: 'excel', label: 'Planilha Excel' },
-                  { value: 'xml', label: 'Somente XML em pasta' },
+                  { value: 'xml', label: 'Somente XML' },
                   { value: 'both', label: 'XML + Excel' },
                 ] as { value: OutputMode; label: string }[]).map((option) => (
                   <label key={option.value} className={`flex cursor-pointer items-center gap-2 rounded-sm border px-3 py-2.5 text-sm transition-colors ${outputMode === option.value ? 'border-accent bg-accent-soft text-primary-fg' : 'border-line bg-surface text-txt-secondary hover:bg-hover'}`}>
@@ -210,28 +175,9 @@ export function DownloadPage() {
               </div>
             </fieldset>
 
-            {outputMode !== 'excel' && (
-              <div className="rounded-sm border border-line bg-subtle p-3">
-                <p className="text-xs font-medium text-txt-secondary">Destino dos XMLs</p>
-                <Button variant="secondary" size="sm" className="mt-2" onClick={chooseFolder}>
-                  <FolderOpen className="h-4 w-4" /> Escolher pasta
-                </Button>
-                {folderName && <p className="mt-2 text-xs text-success-fg">Pasta: {folderName}</p>}
-                <input
-                  aria-label="Caminho da pasta"
-                  className="field mt-2 h-9 w-full px-3 text-xs"
-                  placeholder="Ou informe o caminho/caminho no Storage"
-                  value={folderPath}
-                  onChange={(event) => setFolderPath(event.target.value)}
-                />
-                <p className="mt-2 text-[11px] leading-relaxed text-txt-muted">
-                  No navegador, o seletor grava os arquivos na pasta escolhida (Chrome/Edge). Em produção, o caminho pode apontar para uma pasta no Supabase Storage.
-                </p>
-              </div>
-            )}
-
             <p className="text-xs text-txt-muted">
-              A SEFAZ disponibiliza apenas os últimos 100 dias. Períodos fora dessa faixa serão avisados pelo backend.
+              Excel e XML são baixados automaticamente para a pasta padrão de Downloads do
+              navegador, sem opção de destino. A SEFAZ disponibiliza apenas os últimos 100 dias.
             </p>
 
             <Button fullWidth loading={running} loadingText="Baixando..." onClick={start}>

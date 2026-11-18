@@ -1,8 +1,9 @@
-import { CheckCircle2, KeyRound, ShieldOff, Users } from 'lucide-react'
+import { CheckCircle2, KeyRound, Plus, ShieldOff, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Card,
+  Input,
   Modal,
   Table,
   Skeleton,
@@ -35,6 +36,15 @@ export function LicensesPage() {
   const [selected, setSelected] = useState<License | null>(null)
   const [duration, setDuration] = useState('30')
   const [saving, setSaving] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newUser, setNewUser] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    days: '30',
+    role: 'contador' as 'admin' | 'contador',
+  })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,6 +92,40 @@ export function LicensesPage() {
       showError('Não foi possível salvar.', err instanceof Error ? err.message : undefined)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const createUser = async () => {
+    if (newUser.fullName.trim().length < 2) {
+      showError('Nome obrigatório', 'Informe o nome do usuário.')
+      return
+    }
+    if (!newUser.email.includes('@') || !newUser.email.split('@')[1]?.includes('.')) {
+      showError('E-mail inválido', 'Confira o e-mail informado.')
+      return
+    }
+    if (newUser.password.length < 6) {
+      showError('Senha fraca', 'A senha deve ter pelo menos 6 caracteres.')
+      return
+    }
+
+    setCreating(true)
+    try {
+      const license = await licenseService.createUser({
+        fullName: newUser.fullName.trim(),
+        email: newUser.email.trim(),
+        password: newUser.password,
+        days: Number(newUser.days),
+        role: newUser.role,
+      })
+      success('Licença gerada!', `${license.userEmail} já pode acessar o sistema.`)
+      setCreateOpen(false)
+      setNewUser({ fullName: '', email: '', password: '', days: '30', role: 'contador' })
+      await load()
+    } catch (err) {
+      showError('Não foi possível gerar a licença', err instanceof Error ? err.message : undefined)
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -158,9 +202,14 @@ export function LicensesPage() {
             Autorize usuários, defina o tempo de uso e bloqueie acessos quando necessário.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={load}>
-          Atualizar lista
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" size="sm" onClick={load}>
+            Atualizar lista
+          </Button>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" /> Gerar licença
+          </Button>
+        </div>
       </div>
 
       <Card className="p-5 sm:p-6">
@@ -247,6 +296,77 @@ export function LicensesPage() {
             O usuário não conseguirá entrar até que um administrador autorize o acesso novamente.
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        title="Gerar licença de acesso"
+        description="O usuário será criado no Supabase Auth e liberado imediatamente pelo prazo escolhido."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCreateOpen(false)}>
+              Cancelar
+            </Button>
+            <Button loading={creating} loadingText="Criando..." onClick={createUser}>
+              Gerar licença
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label="Nome completo"
+            containerClassName="sm:col-span-2"
+            value={newUser.fullName}
+            onChange={(event) => setNewUser({ ...newUser, fullName: event.target.value })}
+          />
+          <Input
+            label="E-mail"
+            type="email"
+            containerClassName="sm:col-span-2"
+            value={newUser.email}
+            onChange={(event) => setNewUser({ ...newUser, email: event.target.value })}
+          />
+          <Input
+            label="Senha"
+            type="password"
+            value={newUser.password}
+            onChange={(event) => setNewUser({ ...newUser, password: event.target.value })}
+          />
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-txt-secondary" htmlFor="novo-perfil">
+              Perfil
+            </label>
+            <select
+              id="novo-perfil"
+              className="field h-10 w-full px-3 text-sm focus:border-accent focus:ring-2 focus:ring-accent focus:outline-none"
+              value={newUser.role}
+              onChange={(event) =>
+                setNewUser({ ...newUser, role: event.target.value as 'admin' | 'contador' })
+              }
+            >
+              <option value="contador">Contador</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-txt-secondary" htmlFor="novo-prazo">
+              Tempo de uso
+            </label>
+            <select
+              id="novo-prazo"
+              className="field h-10 w-full px-3 text-sm focus:border-accent focus:ring-2 focus:ring-accent focus:outline-none"
+              value={newUser.days}
+              onChange={(event) => setNewUser({ ...newUser, days: event.target.value })}
+            >
+              <option value="30">30 dias</option>
+              <option value="90">90 dias</option>
+              <option value="180">6 meses</option>
+              <option value="365">1 ano</option>
+            </select>
+          </div>
+        </div>
       </Modal>
     </div>
   )

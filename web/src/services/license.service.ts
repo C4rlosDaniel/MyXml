@@ -1,5 +1,6 @@
 import type { License, LicenseStatus } from '@/types'
-import { isMockMode } from './config'
+import { apiRequest } from './api.client'
+import { isApiConfigured, isMockMode } from './config'
 import { findUserById, readDb, toLicense, writeDb } from './mockStore'
 import { supabase } from './supabase'
 
@@ -39,6 +40,28 @@ export const licenseService = {
       .maybeSingle()
     if (error || !data) return null
     return mapRow(data as Record<string, unknown>)
+  },
+
+  async createUser(payload: {
+    fullName: string
+    email: string
+    password: string
+    days: number
+    role: 'admin' | 'contador'
+  }): Promise<License> {
+    if (isMockMode || !isApiConfigured) {
+      throw new Error('Configure a API FastAPI para gerar licenças.')
+    }
+    return apiRequest<License>('/licenses', {
+      method: 'POST',
+      body: JSON.stringify({
+        full_name: payload.fullName,
+        email: payload.email,
+        password: payload.password,
+        days: payload.days,
+        role: payload.role,
+      }),
+    })
   },
 
   async listAll(): Promise<License[]> {
