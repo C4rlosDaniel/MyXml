@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     storage_bucket: str = "documentos"
     cert_encryption_key: str = ""
+    cert_encryption_key_file: str = ""
     mock_mode: bool = True
+    alert_webhook_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

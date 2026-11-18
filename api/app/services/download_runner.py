@@ -7,11 +7,16 @@ regras fiscais. A única adaptação é o destino dos arquivos: diretório tempo
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from datetime import datetime, time, timezone
 from pathlib import Path
 
+import requests
+
 from app.config import settings
+
+logger = logging.getLogger("myxml.download")
 from app.services import certificate_vault
 from app.services.supabase_client import get_supabase_admin
 from core import downloader, excel, notas, sefaz_nfce
@@ -40,6 +45,21 @@ def _valor(raw: str) -> float:
 
 def _atualizar_job(job_id: str, **campos: object) -> None:
     get_supabase_admin().from_("download_runs").update(campos).eq("id", job_id).execute()
+
+
+def _alertar_falha(job_id: str, mensagem: str) -> None:
+    """Webhook opcional de alerta. Sem URL configurada, apenas loga."""
+    logger.error("job %s falhou: %s", job_id, mensagem)
+    if not settings.alert_webhook_url:
+        return
+    try:
+        requests.post(
+            settings.alert_webhook_url,
+            json={"job_id": job_id, "message": mensagem},
+            timeout=5,
+        )
+    except Exception as exc:  # noqa: BLE001 - alerta não pode derrubar o job
+        logger.warning("falha ao enviar alerta: %s", exc)
 
 
 def executar(job_id: str) -> None:
@@ -152,12 +172,14 @@ def executar(job_id: str) -> None:
             finished_at=datetime.now(timezone.utc).isoformat(),
         )
     except Exception as exc:  # noqa: BLE001 - traduz falha para o usuário
+        mensagem = f"Falha no download: {type(exc).__name__}: {exc}"
         _atualizar_job(
             job_id,
             status="falhou",
-            mensagem=f"Falha no download: {type(exc).__name__}: {exc}",
+            mensagem=mensagem,
             finished_at=datetime.now(timezone.utc).isoformat(),
         )
+        _alertar_falha(job_id, mensagem)
 
 
 def gerar_excel(job_id: str) -> tuple[str, Path]:

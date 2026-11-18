@@ -141,6 +141,29 @@ foi alterada — o core Python original está em `api/core/`.
 > Segurança: as chaves enviadas por chat devem ser **rotacionadas**. Use apenas
 > a anon/publishable key no front; a service role key fica exclusivamente na API.
 
+## Segurança e operação
+
+- O cofre exige `CERT_ENCRYPTION_KEY` (ou `CERT_ENCRYPTION_KEY_FILE`) fora do
+  modo demo — não há mais fallback inseguro em produção.
+- RLS validado com usuários reais: admin vê 2 empresas, contador vê apenas a
+  empresa da qual é membro; `company_certificates` não é legível por clientes.
+- Logs estruturados no padrão `timestamp LEVEL logger mensagem` (inclui método,
+  rota, status e duração de cada requisição).
+- Falha de job gera log de erro e, se `ALERT_WEBHOOK_URL` estiver definido,
+  envia um webhook com `job_id` e mensagem.
+- Rotação da chave do cofre:
+  `OLD_CERT_ENCRYPTION_KEY=... NEW_CERT_ENCRYPTION_KEY=... python api/scripts/rotate_cert_key.py`
+
+## Testes
+
+```powershell
+cd api; .\.venv\Scripts\python.exe -m pytest tests -q
+cd web; npm test
+```
+
+Cobertura atual: health/licenças/download/vault/escopo de acesso (API) e
+máscaras pt-BR (front).
+
 ## Segurança
 
 - Nunca commite `.env`, tokens ou senhas. Use apenas `.env.example`.

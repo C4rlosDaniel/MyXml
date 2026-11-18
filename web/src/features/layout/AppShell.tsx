@@ -230,6 +230,13 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-app">
+      <a
+        href="#conteudo"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-sm focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-txt-primary focus:shadow-md"
+      >
+        Pular para o conteúdo
+      </a>
+
       {/* Sidebar desktop */}
       <aside
         className={cn(
@@ -418,7 +425,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1160px] px-4 pb-24 pt-6 md:px-8 md:pb-10">
+        <main id="conteudo" className="mx-auto w-full max-w-[1160px] px-4 pb-24 pt-6 md:px-8 md:pb-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

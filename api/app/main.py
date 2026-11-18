@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import time
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +12,20 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.routers import auth, download, empresas, health, licenses, notes
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("myxml")
+
+if not settings.mock_mode and not (
+    settings.cert_encryption_key or settings.cert_encryption_key_file
+):
+    raise RuntimeError(
+        "CERT_ENCRYPTION_KEY é obrigatório quando MOCK_MODE=false. "
+        "Use uma chave gerenciada (KMS/Vault) em produção."
+    )
 
 app = FastAPI(
     title="MyXml API",
@@ -23,6 +40,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed = (time.perf_counter() - started) * 1000
+    logger.info(
+        "%s %s -> %s (%.0fms)",
+        request.method,
+        request.url.path,
+        response.status_code,
+        elapsed,
+    )
+    return response
+
 
 app.include_router(health.router)
 app.include_router(auth.router)
