@@ -86,7 +86,8 @@ A integração com Supabase e SEFAZ está preparada nos serviços e na API.
 - `VITE_FORCE_MOCK=true` mantém o demo funcionando até o Supabase ser ativado.
 - Deploy manual: `cd web && vercel --prod`. (A conexão Git automática falhou por
   permissão do GitHub na conta da Vercel — pode ser feita pelo dashboard.)
-- API FastAPI ainda precisa de host Python (Railway/Render/Fly).
+- API FastAPI preparada para **Fly.io** (`api/fly.toml` + `api/Dockerfile`, região GRU).
+  Deploy: `flyctl deploy` dentro de `api/`, com os secrets configurados.
 
 ## Fase 1 — ativação do Supabase (checklist)
 
