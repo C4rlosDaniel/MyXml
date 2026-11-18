@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+web/node_modules/
+api/.venv/
+.venv/
+
+# Build outputs
+web/dist/
+dist/
+build/
+
+# Environment / secrets (nunca versionar)
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Supabase CLI cache
+supabase/.temp/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,49 @@
+@import './tokens.css';
+@import './surfaces.css';
+@import './animations.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    font-size: 16px;
+  }
+
+  body {
+    @apply min-h-screen bg-app font-sans text-base text-txt-primary antialiased;
+    background-color: var(--bg-app);
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  ::selection {
+    background: var(--primary-100);
+    color: var(--text-primary);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-400);
+    background-clip: content-box;
+  }
+}

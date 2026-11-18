@@ -1,0 +1,31 @@
+/* Superfícies sólidas e padronizadas. */
+
+@layer components {
+  .surface {
+    @apply rounded-md border border-line bg-surface shadow-xs;
+  }
+
+  .surface-raised {
+    @apply rounded-md border border-line bg-surface shadow-sm;
+  }
+
+  .surface-flat {
+    @apply rounded-md border border-transparent bg-transparent shadow-none;
+  }
+
+  .field {
+    @apply rounded-sm border border-line bg-surface;
+  }
+
+  .divider {
+    @apply border-line;
+  }
+
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
