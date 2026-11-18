@@ -76,8 +76,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback<ToastContextValue['toast']>(
     ({ kind = 'info', title, description, duration = 5000 }) => {
-      const id = ++nextId
-      setToasts((current) => [...current, { id, kind, title, description, duration }])
+      setToasts((current) => {
+        // Evita avisos idênticos repetidos (ex.: StrictMode ou duplo clique).
+        if (current.some((item) => item.title === title && item.description === description)) {
+          return current
+        }
+        return [...current, { id: ++nextId, kind, title, description, duration }]
+      })
     },
     [],
   )
@@ -101,8 +106,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <Toast.Provider swipeDirection="right" duration={5000}>
         {children}
 
-        {toasts.map((item) => {
-          const Icon = icons[item.kind]
+        <Toast.Viewport className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(92vw,400px)] flex-col gap-2 outline-none">
+          {toasts.map((item) => {
+            const Icon = icons[item.kind]
           return (
             <Toast.Root
               key={item.id}
@@ -146,9 +152,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               />
             </Toast.Root>
           )
-        })}
-
-        <Toast.Viewport className="pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(92vw,400px)] flex-col gap-2 outline-none" />
+          })}
+        </Toast.Viewport>
       </Toast.Provider>
     </ToastContext.Provider>
   )

@@ -28,8 +28,8 @@ select
   n.emitida_em::timestamptz, n.valor, n.situacao, n.client_name
 from (values
   ('35261130720420000103650010000001231000000010', '123', '2026-11-18T14:32:00', 258.90, 'autorizada',  'Villa Santa Maria Ltda'),
-  ('35261130720420000103650010000001221000000020', '122', '2026-11-18T11:07:00', 119.50, 'autorizada',  'Agropecuária Central'),
-  ('35261130720420000103650010000001211000000030', '121', '2026-11-17T18:45:00', 432.00, 'rejeitada',   'Mercado Bom Preço')
+  ('35261130720420000103650010000001221000000020', '122', '2026-11-18T11:07:00', 119.50, 'autorizada',  'Agropecu' || chr(225) || 'ria Central'),
+  ('35261130720420000103650010000001211000000030', '121', '2026-11-17T18:45:00', 432.00, 'rejeitada',   'Mercado Bom Pre' || chr(231) || 'o')
 ) as n(chave, numero, emitida_em, valor, situacao, client_name)
 where not exists (
   select 1 from public.notes x where x.chave = n.chave

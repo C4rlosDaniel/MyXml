@@ -97,12 +97,17 @@ export function DashboardPage() {
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Trocar a empresa recarrega os dados e atualiza o dashboard automaticamente.
   useEffect(() => {
+    let ativo = true
+    setLoading(true)
     notesService.list().then((data) => {
+      if (!ativo) return
       setNotes(data)
       setLoading(false)
     })
-  }, [])
+    return () => { ativo = false }
+  }, [selectedCompanyId])
 
   const companyNotes = useMemo(
     () => notes.filter((note) => note.companyId === selectedCompanyId),
@@ -200,7 +205,13 @@ export function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-txt-primary">Visão geral</h1>
           <p className="mt-1 text-sm text-txt-secondary">
-            Dados de <strong className="font-semibold text-txt-primary">{selectedCompany.nomeExibicao || selectedCompany.razaoSocial}</strong>
+            {loading ? (
+              'Atualizando dados da empresa...'
+            ) : (
+              <>
+                Dados de <strong className="font-semibold text-txt-primary">{selectedCompany.nomeExibicao || selectedCompany.razaoSocial}</strong>
+              </>
+            )}
           </p>
         </div>
         <Button onClick={() => navigate('/baixar')}>

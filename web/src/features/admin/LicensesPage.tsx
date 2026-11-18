@@ -51,7 +51,7 @@ export function LicensesPage() {
     try {
       setLicenses(await licenseService.listAll())
     } catch (err) {
-      showError('Não foi possível carregar as licenças.', err instanceof Error ? err.message : undefined)
+      showError('Não foi possível carregar as licenças.')
     } finally {
       setLoading(false)
     }
