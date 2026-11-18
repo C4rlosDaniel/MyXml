@@ -201,8 +201,8 @@ def chamar(
         except Exception as erro:
             if tentativa == tentativas:
                 raise SefazErro(
-                    f"Nao consegui falar com a SEFAZ ({type(erro).__name__}).\n"
-                    "Verifique a internet, o relogio do Windows e tente novamente."
+                    f"Nao consegui falar com a SEFAZ ({type(erro).__name__}): {erro}\n"
+                    "Verifique a internet, o relogio do servidor e o certificado A1."
                 ) from erro
             espera = 10 * tentativa
             log(f"# conexao interrompida. Tentando de novo em {espera}s...")
