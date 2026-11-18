@@ -57,7 +57,7 @@ async def criar_usuario_licenca(
 
     row = (
         client.from_("licenses")
-        .select("*, profiles!licenses_user_id_fkey(full_name, email)")
+        .select("*, profiles!licenses_user_id_fkey(full_name)")
         .eq("user_id", user.id)
         .maybe_single()
         .execute()
@@ -71,7 +71,7 @@ async def criar_usuario_licenca(
         "id": str(row["id"]),
         "user_id": str(row["user_id"]),
         "user_name": str(profile.get("full_name", payload.full_name)),
-        "user_email": str(profile.get("email", payload.email)),
+        "user_email": str(user.email or payload.email),
         "status": row["status"],
         "valid_until": row.get("valid_until"),
         "activated_by": row.get("activated_by"),
