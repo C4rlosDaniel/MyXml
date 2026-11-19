@@ -20,7 +20,7 @@ export interface RunRecord {
   company: string
   period: string
   startedAt: string
-  status: 'concluido' | 'com_erros' | 'executando' | 'falhou'
+  status: 'concluido' | 'com_erros' | 'executando' | 'falhou' | 'interrompido'
   downloaded: number
   errors: number
   user: string
@@ -160,6 +160,12 @@ export const cadastrosService = {
   async cancelDownload(jobId: string): Promise<void> {
     if (!isApiConfigured) return
     await apiRequest(`/downloads/${jobId}/cancel`, { method: 'POST' })
+  },
+
+  /** Retoma um download interrompido de onde parou. */
+  async resumeDownload(jobId: string): Promise<void> {
+    if (!isApiConfigured) return
+    await apiRequest(`/downloads/${jobId}/run`, { method: 'POST' })
   },
 
   async exportExcel(jobId: string): Promise<void> {

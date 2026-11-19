@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/downloads", tags=["downloads"])
 
 def _guard() -> None:
     if settings.mock_mode:
-        raise HTTPException(status_code=501, detail="Configure o Supabase para usar este endpoint.")
+        raise HTTPException(status_code=501, detail="Este recurso está indisponível no momento.")
 
 
 def _period_bounds(period: str | None) -> tuple[date | None, date | None]:
@@ -42,10 +44,10 @@ def iniciar_download(
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_current_user),
 ) -> dict:
-    """Registra a execução. O processamento SEFAZ será um job em background.
+    """Registra a execução e processa em background.
 
-    TODO: envolver app/core/sefaz_nfce.py + certificado.py e publicar
-    progresso (polling/websocket). Nada disso roda na máquina do usuário.
+    O download salva cada nota assim que ela chega, então pode ser retomado sem
+    refazer o que já foi baixado.
     """
     _guard()
     client = get_supabase_admin()
@@ -59,6 +61,7 @@ def iniciar_download(
 
     # A SEFAZ limita chamadas simultâneas com o mesmo certificado (código 656)
     # e pode bloquear o contribuinte. Uma execução por empresa por vez.
+    download_runner.marcar_interrompidas(company_id)
     em_andamento = (
         client.from_("download_runs")
         .select("id")
@@ -110,6 +113,20 @@ def status_download(job_id: str, user: dict = Depends(get_current_user)) -> dict
     ids = allowed_company_ids(user, client)
     if ids is not None and str(job.get("company_id")) not in ids:
         raise HTTPException(status_code=403, detail="Sem acesso a esta execução.")
+
+    # Job que parou de dar sinal (deploy, queda da máquina) vira "interrompido"
+    # para o front poder retomar de onde parou, em vez de ficar preso em 409.
+    if job.get("status") == "executando" and download_runner.sem_sinal(
+        job.get("atualizado_em"), download_runner.SEGUNDOS_SEM_SINAL
+    ):
+        download_runner.marcar_interrompidas(str(job["company_id"]))
+        job = maybe_data(
+            client.from_("download_runs")
+            .select("*, companies(razao_social, nome_exibicao)")
+            .eq("id", job_id)
+            .maybe_single()
+            .execute()
+        ) or job
     return job
 
 
@@ -119,11 +136,42 @@ def repetir_download(
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_current_user),
 ) -> dict:
-    """Repete um job existente (útil após falha transitória da SEFAZ)."""
+    """Retoma um job interrompido/falho. Quem já foi salvo não é baixado de novo."""
     _guard()
-    status_download(job_id, user)
+    job = status_download(job_id, user)
+    if job.get("status") == "executando":
+        raise HTTPException(status_code=409, detail="Esta execução já está em andamento.")
+
+    client = get_supabase_admin()
+    company_id = str(job.get("company_id"))
+    download_runner.marcar_interrompidas(company_id)
+    outro = (
+        client.from_("download_runs")
+        .select("id, atualizado_em")
+        .eq("company_id", company_id)
+        .eq("status", "executando")
+        .neq("id", job_id)
+        .execute()
+        .data
+        or []
+    )
+    if any(
+        not download_runner.sem_sinal(linha.get("atualizado_em"), download_runner.SEGUNDOS_SEM_SINAL)
+        for linha in outro
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Já existe um download em andamento para esta empresa.",
+        )
+
+    client.from_("download_runs").update({
+        "status": "executando",
+        "mensagem": None,
+        "finished_at": None,
+        "atualizado_em": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", job_id).execute()
     background_tasks.add_task(download_runner.executar, job_id)
-    return {"message": "Download reagendado."}
+    return {"message": "Download retomado."}
 
 
 @router.post("/{job_id}/cancel", response_model=MessageOut)
@@ -152,23 +200,72 @@ def cancelar_download(job_id: str, user: dict = Depends(get_current_user)) -> di
 
 @router.get("/{job_id}/xml")
 def baixar_xmls(job_id: str, user: dict = Depends(get_current_user)) -> Response:
-    """Devolve o ZIP com os XMLs originais gravados no Storage pelo job."""
+    """Monta um ZIP com os XMLs já salvos da empresa no período da execução.
+
+    Não depende de um ZIP gerado no fim do job: funciona mesmo quando o
+    download foi interrompido no meio, com tudo o que já foi salvo.
+    """
     _guard()
     job = status_download(job_id, user)
-    inicio = job.get("periodo_ini")
-    if not inicio:
+    if not job.get("periodo_ini") or not job.get("periodo_fim"):
         raise HTTPException(status_code=404, detail="Período da execução não encontrado.")
-    mes = datetime.fromisoformat(str(inicio)).date()
-    nome = f"NFCe-{mes:%Y-%m}.zip"
-    caminho = f"{job['company_id']}/{mes:%Y-%m}/{nome}"
-    try:
-        conteudo = get_supabase_admin().storage.from_(settings.storage_bucket).download(caminho)
-    except Exception as exc:  # noqa: BLE001
+
+    inicio = date.fromisoformat(str(job["periodo_ini"]))
+    fim = date.fromisoformat(str(job["periodo_fim"]))
+    client = get_supabase_admin()
+
+    linhas: list[dict] = []
+    vistas: set[str] = set()
+    for mes in download_runner.meses_do_periodo(inicio, fim):
+        lote = (
+            client.from_("notes")
+            .select("chave, storage_path")
+            .eq("company_id", job["company_id"])
+            .like("chave", f"__{mes}%")
+            .not_.is_("storage_path", "null")
+            .execute()
+            .data
+            or []
+        )
+        for linha in lote:
+            chave = str(linha["chave"])
+            if chave not in vistas:
+                vistas.add(chave)
+                linhas.append(linha)
+
+    if not linhas:
         raise HTTPException(
-            status_code=404, detail="O arquivo XML desta execução não está mais disponível."
-        ) from exc
+            status_code=404,
+            detail="Nenhum XML salvo para este período. Baixe as notas primeiro.",
+        )
+
+    conteudo = io.BytesIO()
+    enviados = 0
+    with zipfile.ZipFile(conteudo, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for linha in linhas:
+            caminho = str(linha.get("storage_path") or "")
+            if not caminho:
+                continue
+            try:
+                dados = client.storage.from_(settings.storage_bucket).download(caminho)
+            except Exception:  # noqa: BLE001 - objeto ausente não impede o restante
+                continue
+            arquivo.writestr(caminho.rsplit("/", 1)[-1], dados)
+            enviados += 1
+
+    if not enviados:
+        raise HTTPException(
+            status_code=404,
+            detail="Os XMLs desta execução não estão mais disponíveis. Baixe novamente.",
+        )
+
+    if (inicio.year, inicio.month) == (fim.year, fim.month):
+        nome = f"NFCe-{inicio:%Y-%m}.zip"
+    else:
+        nome = f"NFCe-{inicio:%Y-%m-%d}_a_{fim:%Y-%m-%d}.zip"
+
     return Response(
-        content=conteudo,
+        content=conteudo.getvalue(),
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{nome}"'},
     )

@@ -87,6 +87,9 @@ def baixar_periodo(
     progresso: Progresso | None = None,
     gerar_zip_arquivo: bool = True,
     somente_listar: bool = False,
+    cancelado: Callable[[], bool] | None = None,
+    pular: set[str] | None = None,
+    ao_baixar: Callable[[str, Path], None] | None = None,
 ) -> ResultadoDownload:
     sefaz_nfce.validar_intervalo(inicio, fim)
     pasta_mes = pasta_do_mes(pasta, inicio, fim)
@@ -126,7 +129,15 @@ def baixar_periodo(
     log(f"  Pasta do mês: {pasta_mes}")
     log("  Baixando...")
     total, baixadas = sefaz_nfce.baixar_chaves(
-        pfx_bytes, senha, chaves, pasta_mes, log, progresso
+        pfx_bytes,
+        senha,
+        chaves,
+        pasta_mes,
+        log,
+        progresso,
+        cancelado=cancelado,
+        pular=pular,
+        ao_baixar=ao_baixar,
     )
     resultado.ok = total["ok"]
     resultado.ja_tinha = total["ja_tinha"]

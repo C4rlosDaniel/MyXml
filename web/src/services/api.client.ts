@@ -80,10 +80,21 @@ export async function apiDownload(path: string, filename: string): Promise<void>
   })
   if (!response.ok) throw await parseError(response)
 
+  const disposicao = response.headers.get('Content-Disposition') ?? ''
+  const encontrado = disposicao.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i)
+  let nome = filename
+  if (encontrado) {
+    try {
+      nome = decodeURIComponent(encontrado[1].replace(/"/g, ''))
+    } catch {
+      nome = encontrado[1]
+    }
+  }
+
   const url = URL.createObjectURL(await response.blob())
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = filename
+  anchor.download = nome
   anchor.click()
   URL.revokeObjectURL(url)
 }

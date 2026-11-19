@@ -56,6 +56,10 @@ class PeriodoInvalido(Exception):
     """Periodo fora da janela permitida pela SEFAZ."""
 
 
+class ExecucaoCancelada(Exception):
+    """O download foi interrompido (usuario ou tempo maximo da etapa)."""
+
+
 # --------------------------------------------------------------------------
 # Periodo
 # --------------------------------------------------------------------------
@@ -125,6 +129,34 @@ def rotulo_periodo(inicio: datetime, fim: datetime) -> str:
 # --------------------------------------------------------------------------
 
 
+def data_de_emissao(raiz: etree._Element) -> str:
+    """Data de emissão do XML (dhEmi) no formato DD/MM/AA."""
+    bruto = texto(raiz, "dhEmi")
+    if len(bruto) < 10:
+        return ""
+    try:
+        return datetime.strptime(bruto[:10], "%Y-%m-%d").strftime("%d/%m/%y")
+    except ValueError:
+        return ""
+
+
+def _checar_cancelamento(cancelado: Callable[[], bool] | None) -> None:
+    if cancelado is not None and cancelado():
+        raise ExecucaoCancelada()
+
+
+def _dormir(segundos: float, cancelado: Callable[[], bool] | None = None) -> None:
+    """Espera em fatias curtas para reagir rapido a um cancelamento."""
+    limite = time.monotonic() + segundos
+    while True:
+        _checar_cancelamento(cancelado)
+        restante = limite - time.monotonic()
+        if restante <= 0:
+            return
+        time.sleep(min(restante, 1.0))
+
+
+
 def envelope(servico: str, corpo: str) -> str:
     return (
         '<?xml version="1.0" encoding="utf-8"?>'
@@ -183,12 +215,14 @@ def chamar(
     servico: str,
     corpo: str,
     log: Log = print,
-    tentativas: int = 4,
+    tentativas: int = 3,
+    cancelado: Callable[[], bool] | None = None,
 ) -> etree._Element:
     url = f"{HOSTS[AMBIENTE]}/ws/{servico}.asmx"
     raiz: etree._Element | None = None
 
     for tentativa in range(1, tentativas + 1):
+        _checar_cancelamento(cancelado)
         try:
             resposta = requests_pkcs12.post(
                 url,
@@ -196,19 +230,22 @@ def chamar(
                 headers={"Content-Type": "application/soap+xml; charset=utf-8"},
                 pkcs12_data=pfx_bytes,
                 pkcs12_password=senha,
-                timeout=60,
+                timeout=30,
             )
+        except ExecucaoCancelada:
+            raise
         except Exception as erro:
             if tentativa == tentativas:
                 raise SefazErro(
                     f"Nao consegui falar com a SEFAZ ({type(erro).__name__}): {erro}\n"
                     "Verifique a internet, o relogio do servidor e o certificado A1."
                 ) from erro
-            espera = 10 * tentativa
+            espera = 5 * tentativa
             log(f"# conexao interrompida. Tentando de novo em {espera}s...")
-            time.sleep(espera)
+            _dormir(espera, cancelado)
             continue
 
+        _checar_cancelamento(cancelado)
         if resposta.status_code != 200:
             raise SefazErro(f"SEFAZ respondeu HTTP {resposta.status_code}.")
         try:
@@ -222,9 +259,9 @@ def chamar(
         if texto(raiz, "cStat") != "656":
             return raiz
 
-        espera = 15 * tentativa
+        espera = 10 * tentativa
         log(f"# SEFAZ pediu para ir mais devagar. Aguardando {espera}s...")
-        time.sleep(espera)
+        _dormir(espera, cancelado)
 
     assert raiz is not None
     return raiz
@@ -284,19 +321,35 @@ def baixar_chaves(
     log: Log = print,
     progresso: Progresso | None = None,
     pausa: float = PAUSA,
+    *,
+    cancelado: Callable[[], bool] | None = None,
+    pular: set[str] | None = None,
+    ao_baixar: Callable[[str, Path], None] | None = None,
 ) -> tuple[dict[str, int], list[str]]:
-    """Baixa os XMLs (e eventos) das chaves informadas."""
+    """Baixa os XMLs (e eventos) das chaves informadas.
+
+    Uma falha isolada nao derruba o lote: a nota e contabilizada como erro e o
+    download segue para a proxima. ``pular`` evita chamadas repetidas para notas
+    que ja estao salvas e ``ao_baixar`` permite persistir cada nota na hora.
+    """
     total = {"ok": 0, "ja_tinha": 0, "erro": 0}
     baixadas: list[str] = []
     saida.mkdir(parents=True, exist_ok=True)
+    puladas = pular or set()
+    falhas_conexao = 0
+    bloqueios = 0
 
     for i, chave in enumerate(chaves, start=1):
+        _checar_cancelamento(cancelado)
         prefixo = f"[{i:>3}/{len(chaves)}]"
         destino = saida / f"{chave}-procNFCe.xml"
 
-        if destino.exists() and destino.stat().st_size > 0:
+        if chave in puladas:
             total["ja_tinha"] += 1
-            log(f"{prefixo} ja tinha  {chave}")
+            log(f"{prefixo} ja tinha")
+        elif destino.exists() and destino.stat().st_size > 0:
+            total["ja_tinha"] += 1
+            log(f"{prefixo} ja tinha")
         else:
             corpo = (
                 f'<nfceDownloadXML xmlns="{NS_NFE}" versao="{VERSAO}">'
@@ -304,34 +357,91 @@ def baixar_chaves(
                 f"<chNFCe>{chave}</chNFCe>"
                 "</nfceDownloadXML>"
             )
-            raiz = chamar(pfx_bytes, senha, "NFCeDownloadXML", corpo, log)
-            cstat = texto(raiz, "cStat")
-            motivo = texto(raiz, "xMotivo")
-
-            if cstat != "200":
-                extra = MOTIVOS.get(cstat, "ver nota tecnica")
-                log(f"{prefixo} ERRO {chave}: {cstat} - {motivo} ({extra})")
+            raiz: etree._Element | None = None
+            try:
+                raiz = chamar(
+                    pfx_bytes, senha, "NFCeDownloadXML", corpo, log,
+                    cancelado=cancelado,
+                )
+                falhas_conexao = 0
+            except ExecucaoCancelada:
+                raise
+            except SefazErro as erro:
+                falhas_conexao += 1
                 total["erro"] += 1
-            else:
-                procs = achar(raiz, "nfeProc")
-                if not procs:
-                    log(f"{prefixo} ERRO {chave}: retorno sem dados da nota")
+                log(f"{prefixo} ERRO ao baixar: {erro}")
+                if falhas_conexao >= 5:
+                    raise SefazErro(
+                        "A conexão com a SEFAZ caiu várias vezes seguidas. "
+                        "O que já foi baixado está salvo; tente novamente em alguns minutos."
+                    ) from erro
+
+            if raiz is not None:
+                cstat = texto(raiz, "cStat")
+                motivo = texto(raiz, "xMotivo")
+
+                if cstat == "656":
+                    bloqueios += 1
+                    total["erro"] += 1
+                    log(f"{prefixo} ERRO {cstat} - {motivo} (consumo indevido)")
+                    if bloqueios >= 3:
+                        raise SefazErro(
+                            "A SEFAZ bloqueou temporariamente as consultas por excesso "
+                            "de chamadas. Aguarde alguns minutos e continue o download."
+                        )
+                elif cstat == "203":
+                    extra = MOTIVOS.get(cstat, "")
+                    raise SefazErro(
+                        f"SEFAZ recusou: {cstat} - {motivo} ({extra})"
+                    )
+                elif cstat != "200":
+                    bloqueios = 0
+                    extra = MOTIVOS.get(cstat, "ver nota tecnica")
+                    log(f"{prefixo} ERRO {cstat} - {motivo} ({extra})")
                     total["erro"] += 1
                 else:
-                    gravar(destino, nfe_proc_limpo(procs[0]))
-                    total["ok"] += 1
-                    baixadas.append(chave)
-                    log(f"{prefixo} baixada  {chave}")
-                    for j, evento in enumerate(achar(raiz, "procEventoNFe"), start=1):
-                        tipo_evento = texto(evento, "tpEvento") or str(j)
-                        gravar(
-                            saida / f"{chave}-evento-{tipo_evento}.xml", evento
-                        )
-                        log(f"            + evento {tipo_evento} (cancelamento/ajuste)")
+                    bloqueios = 0
+                    procs = achar(raiz, "nfeProc")
+                    if not procs:
+                        log(f"{prefixo} ERRO: retorno sem dados da nota")
+                        total["erro"] += 1
+                    else:
+                        # nfe_proc_limpo move os elementos para um novo nó, então
+                        # a data precisa ser lida antes de montar o XML final.
+                        data = data_de_emissao(raiz)
+                        gravar(destino, nfe_proc_limpo(procs[0]))
+                        eventos = achar(raiz, "procEventoNFe")
+                        for j, evento in enumerate(eventos, start=1):
+                            tipo_evento = texto(evento, "tpEvento") or str(j)
+                            gravar(
+                                saida / f"{chave}-evento-{tipo_evento}.xml", evento
+                            )
+                        try:
+                            if ao_baixar is not None:
+                                ao_baixar(chave, destino)
+                        except ExecucaoCancelada:
+                            raise
+                        except Exception as erro:  # noqa: BLE001 - falha de infraestrutura
+                            total["erro"] += 1
+                            log(f"{prefixo} ERRO ao salvar: {erro}")
+                        else:
+                            total["ok"] += 1
+                            baixadas.append(chave)
+                            log(
+                                f"{prefixo} baixada do dia {data}"
+                                if data
+                                else f"{prefixo} baixada"
+                            )
+                            for evento in eventos:
+                                tipo_evento = texto(evento, "tpEvento") or "?"
+                                log(
+                                    f"            + evento {tipo_evento} "
+                                    "(cancelamento/ajuste)"
+                                )
 
         if progresso is not None:
             progresso(i, len(chaves), chave)
         if pausa:
-            time.sleep(pausa)
+            _dormir(pausa, cancelado)
 
     return total, baixadas

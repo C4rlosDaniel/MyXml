@@ -93,7 +93,7 @@ export function DownloadGuardProvider({ children }: { children: ReactNode }) {
         open={pendingAction !== null}
         onOpenChange={(open) => !open && stay()}
         title="Download em andamento"
-        description="Atenção: sair daqui encerrará a execução."
+        description="Atenção: sair daqui pausará o download."
         size="sm"
         dismissable={false}
         footer={
@@ -102,7 +102,7 @@ export function DownloadGuardProvider({ children }: { children: ReactNode }) {
               Não, continuar baixando
             </Button>
             <Button variant="danger" onClick={leave}>
-              Sim, encerrar e sair
+              Sim, pausar e sair
             </Button>
           </>
         }
@@ -111,12 +111,12 @@ export function DownloadGuardProvider({ children }: { children: ReactNode }) {
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning-fg" />
           <div className="text-sm text-txt-secondary">
             <p>
-              Se você sair desta aba, o programa de baixar notas será{' '}
-              <strong>encerrado</strong> e todo o progresso será perdido.
+              Se você sair desta aba, o download será <strong>pausado</strong>. Tudo o
+              que já foi baixado fica salvo.
             </p>
             <p className="mt-2">
-              Você terá que recomeçar tudo novamente. Isso evita que a troca de aba
-              atrapalhe a comunicação e as buscas na SEFAZ.
+              Ao voltar, é só iniciar o download do mesmo período novamente para
+              continuar de onde parou, sem baixar tudo outra vez.
             </p>
           </div>
         </div>

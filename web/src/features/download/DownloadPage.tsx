@@ -15,15 +15,9 @@ function progressoDoLog(linhas: string[]): { atual: number; total: number } | nu
 }
 
 function formatarLinhaLog(linha: string): string {
-  // O log traz "[ 68/192] baixada  3526...(44 dígitos)". Nas chaves, os
-  // caracteres 2..7 são AAMMDD (ano com 2 dígitos, mês e dia).
-  const encontrado = linha.match(/(\[\s*\d+\s*\/\s*\d+\s*\]\s*baixada\b[^0-9]*)(\d{44})/)
-  if (!encontrado) return linha
-  const chave = encontrado[2]
-  const ano = chave.slice(2, 4)
-  const mes = chave.slice(4, 6)
-  const dia = chave.slice(6, 8)
-  return `${encontrado[1]}do dia ${dia}/${mes}/${ano}`
+  // O backend já envia "baixada do dia DD/MM/AA". Em logs antigos, a chave de
+  // 44 dígitos no fim é um dado técnico e não deve aparecer na tela.
+  return linha.replace(/\s+\d{44}\s*$/, '')
 }
 
 export function DownloadPage() {
@@ -47,6 +41,8 @@ export function DownloadPage() {
   const runIdRef = useRef(0)
   const finishedRef = useRef(false)
   const pollingRef = useRef(false)
+  const resumingRef = useRef(false)
+  const resumeCountRef = useRef(0)
 
   // Mantém a última nota baixada sempre visível dentro do card.
   useEffect(() => {
@@ -121,6 +117,8 @@ export function DownloadPage() {
 
     startRef.current = true
     finishedRef.current = false
+    resumingRef.current = false
+    resumeCountRef.current = 0
     stopTimers()
     const runId = ++runIdRef.current
     setRunning(true)
@@ -158,6 +156,37 @@ export function DownloadPage() {
           setJobStatus(status.status)
           setBaixadas(status.baixadas ?? 0)
           if (status.log) setLog(String(status.log).split('\n').filter(Boolean))
+
+          // O servidor pausa a etapa para não estourar limites da plataforma.
+          // Aqui retomamos automaticamente, sem o usuário precisar clicar de novo.
+          if (status.status === 'interrompido') {
+            if (resumingRef.current) return
+            if (resumeCountRef.current >= 20) {
+              if (pollTimer.current) window.clearInterval(pollTimer.current)
+              pollTimer.current = null
+              startRef.current = false
+              setRunning(false)
+              endDownload()
+              if (finishedRef.current) return
+              finishedRef.current = true
+              showError(
+                'Download pausado',
+                'Não foi possível retomar automaticamente. Inicie o download do mesmo período para continuar.',
+              )
+              return
+            }
+            resumeCountRef.current += 1
+            resumingRef.current = true
+            void cadastrosService
+              .resumeDownload(jobId)
+              .catch(() => undefined)
+              .finally(() => {
+                resumingRef.current = false
+              })
+            return
+          }
+          resumingRef.current = false
+
           if (status.status !== 'executando') {
             if (pollTimer.current) window.clearInterval(pollTimer.current)
             pollTimer.current = null
@@ -168,7 +197,12 @@ export function DownloadPage() {
             if (finishedRef.current) return
             finishedRef.current = true
             if (status.status === 'concluido') {
-              success('Download concluído!', `${status.baixadas} notas baixadas.`)
+              success('Download concluído!', `${status.baixadas} notas salvas.`)
+            } else if (status.status === 'com_erros' && status.baixadas > 0) {
+              success(
+                'Download concluído com pendências',
+                `${status.baixadas} notas salvas; ${status.erros} não puderam ser baixadas.`,
+              )
             } else {
               showError('Download não concluído', status.mensagem ?? 'Tente novamente.')
             }
@@ -221,7 +255,8 @@ export function DownloadPage() {
   }
 
   const notasBaixadas = progressoDoLog(log)
-  const podeBaixar = jobStatus !== null && jobStatus !== 'executando' && baixadas > 0
+  const podeBaixar =
+    jobStatus !== null && jobStatus !== 'executando' && jobStatus !== 'interrompido' && baixadas > 0
 
   return (
     <div>
@@ -312,9 +347,9 @@ export function DownloadPage() {
               <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
             </Button>
             <Button size="sm" disabled={running || !podeBaixar} onClick={saveXmls}>
-              <Download className="h-4 w-4" /> Salvar XMLs
+              <Download className="h-4 w-4" /> Baixar XMLs
             </Button>
-            {!podeBaixar && jobStatus && baixadas === 0 && (
+            {!podeBaixar && jobStatus && jobStatus !== 'interrompido' && baixadas === 0 && (
               <p className="w-full text-xs text-txt-muted">
                 Nenhum arquivo disponível para esta execução.
               </p>
