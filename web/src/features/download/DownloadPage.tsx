@@ -1,4 +1,4 @@
-import { Download, FileSpreadsheet, Play } from 'lucide-react'
+import { Download, FileSpreadsheet, Loader2, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Card, useToast } from '@/design-system'
 import { useCompany } from '@/features/empresas/CompanyProvider'
@@ -32,6 +32,10 @@ export function DownloadPage() {
   const [log, setLog] = useState<string[]>([])
   const [jobStatus, setJobStatus] = useState<string | null>(null)
   const [baixadas, setBaixadas] = useState(0)
+  const [exporting, setExporting] = useState<'excel' | 'xml' | null>(null)
+  // Trava síncrona: evita dois downloads do mesmo arquivo antes do estado
+  // "exporting" chegar ao React.
+  const exportingRef = useRef(false)
   const timer = useRef<number | null>(null)
   const pollTimer = useRef<number | null>(null)
   const jobIdRef = useRef<string | null>(null)
@@ -95,13 +99,36 @@ export function DownloadPage() {
   }, [endDownload])
 
   const saveXmls = async () => {
+    if (exportingRef.current) return
     const jobId = jobIdRef.current
     if (!jobId) return
+    exportingRef.current = true
+    setExporting('xml')
     try {
       await cadastrosService.downloadXmls(jobId)
       success('XMLs baixados!', 'O ZIP foi enviado para a pasta Downloads.')
     } catch (err) {
       showError('Não foi possível baixar os XMLs', err instanceof Error ? err.message : undefined)
+    } finally {
+      exportingRef.current = false
+      setExporting(null)
+    }
+  }
+
+  const exportExcel = async () => {
+    if (exportingRef.current) return
+    const jobId = jobIdRef.current
+    if (!jobId) return
+    exportingRef.current = true
+    setExporting('excel')
+    try {
+      await cadastrosService.exportExcel(jobId)
+      success('Planilha baixada.')
+    } catch (err) {
+      showError('Não foi possível gerar a planilha', err instanceof Error ? err.message : undefined)
+    } finally {
+      exportingRef.current = false
+      setExporting(null)
     }
   }
 
@@ -332,22 +359,33 @@ export function DownloadPage() {
             <Button
               variant="secondary"
               size="sm"
-              disabled={running || !podeBaixar}
-              onClick={async () => {
-                const jobId = jobIdRef.current
-                if (!jobId) return
-                try {
-                  await cadastrosService.exportExcel(jobId)
-                  success('Planilha baixada.')
-                } catch (err) {
-                  showError('Não foi possível gerar a planilha', err instanceof Error ? err.message : undefined)
-                }
-              }}
+              disabled={running || !podeBaixar || exporting !== null}
+              onClick={exportExcel}
             >
-              <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
+              {exporting === 'excel' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Baixando Excel...
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
+                </>
+              )}
             </Button>
-            <Button size="sm" disabled={running || !podeBaixar} onClick={saveXmls}>
-              <Download className="h-4 w-4" /> Baixar XMLs
+            <Button
+              size="sm"
+              disabled={running || !podeBaixar || exporting !== null}
+              onClick={saveXmls}
+            >
+              {exporting === 'xml' ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Baixando XMLs...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" /> Baixar XMLs
+                </>
+              )}
             </Button>
             {!podeBaixar && jobStatus && jobStatus !== 'interrompido' && baixadas === 0 && (
               <p className="w-full text-xs text-txt-muted">
