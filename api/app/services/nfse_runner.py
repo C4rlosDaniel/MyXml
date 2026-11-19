@@ -1,14 +1,19 @@
 """Busca de NFS-e no ADN em background (somente download/consulta).
 
-Mesmo padrão do download de NFC-e: cada nota é salva na hora (Storage + banco),
-o último NSU é gravado após cada documento e a busca pode ser retomada de onde
-parou. Uma falha isolada não apaga o que já foi baixado: o job para no NSU
+Mesmo padrão do download de NFC-e: cada documento é salvo na hora (Storage +
+banco), o último NSU é gravado após cada item e a busca pode ser retomada de
+onde parou. Uma falha isolada não apaga o que já foi baixado: o job para no NSU
 problemático e a próxima execução recomeça exatamente dele.
+
+O ADN entrega lotes de até 50 documentos por consulta. Um 404 significa "não
+existem documentos a partir deste NSU" — nesse caso o último NSU NÃO avança,
+para que a próxima execução pegue as notas que forem emitidas depois.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import datetime, timezone
 
@@ -127,22 +132,79 @@ def _dormir(segundos: float, cancelado) -> None:
         time.sleep(min(restante, 1.0))
 
 
-def _buscar_documento(cliente_adn, nsu: int, cancelado) -> bytes:
-    """Duas tentativas para falhas transitórias; 204/404 seguem direto."""
+def _consultar(cliente_adn, nsu: int, cancelado) -> nfse_adn.RespostaDfe:
+    """Duas tentativas para falhas transitórias; 400/401/403 não adianta repetir."""
     ultimo_erro: nfse_adn.AdnError | None = None
     for tentativa in range(1, 3):
         if cancelado():
             raise ExecucaoCancelada()
         try:
-            return cliente_adn.documento(nsu)
+            return cliente_adn.consultar(nsu, lote=True)
         except nfse_adn.AdnError as exc:
-            if exc.status in (204, 404):
-                raise
             ultimo_erro = exc
+            if exc.status in (400, 401, 403):
+                raise
             if tentativa < 2:
                 _dormir(2.0 * tentativa, cancelado)
     assert ultimo_erro is not None
     raise ultimo_erro
+
+
+def _chave_do_evento(item: nfse_adn.ItemDfe) -> str:
+    if item.chave:
+        return item.chave
+    encontrada = re.search(rb"\b\d{50}\b", item.xml)
+    return encontrada.group(0).decode("ascii") if encontrada else ""
+
+
+def _processar_evento(client, empresa: str, item: nfse_adn.ItemDfe) -> bool:
+    """Aplica um evento à nota já salva (cancelamento, substituição etc.)."""
+    chave = _chave_do_evento(item)
+    if not chave:
+        logger.info("evento NSU %s sem chave de acesso", item.nsu)
+        return False
+
+    existentes = (
+        client.from_("nfse_notes")
+        .select("id, eventos")
+        .eq("company_id", empresa)
+        .eq("chave", chave)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not existentes:
+        # Pode acontecer quando o histórico começou no meio; não é falha do lote.
+        logger.info("evento NSU %s sem nota correspondente (%s)", item.nsu, chave)
+        return False
+
+    nota = existentes[0]
+    texto_evento = item.xml.decode("utf-8", errors="ignore").strip()
+    eventos_atuais = nota.get("eventos") or ""
+    if texto_evento and texto_evento not in eventos_atuais:
+        eventos_atuais = "\n".join(
+            parte for parte in [eventos_atuais, texto_evento] if parte
+        )
+    campos: dict[str, object] = {"eventos": eventos_atuais, "updated_at": _agora()}
+    tipo_evento = item.tipo_evento.upper()
+    if (
+        nfse_adn.tem_cancelamento(item.xml)
+        or "101101" in tipo_evento
+        or "CANCELAMENTO" in tipo_evento
+    ):
+        campos["situacao"] = "cancelada"
+
+    caminho = f"{empresa}/nfse/eventos/{chave}-{item.nsu}.xml"
+    try:
+        client.storage.from_(settings.storage_bucket).upload(
+            caminho, item.xml, {"upsert": "true", "content-type": "application/xml"}
+        )
+    except Exception as exc:  # noqa: BLE001 - o evento em si já está no banco
+        logger.warning("evento NSU %s não foi guardado no Storage: %s", item.nsu, exc)
+
+    client.from_("nfse_notes").update(campos).eq("id", nota["id"]).execute()
+    return True
 
 
 def executar(job_id: str) -> None:
@@ -224,11 +286,12 @@ def executar(job_id: str) -> None:
         if len(linhas) % 5 == 0:
             _atualizar(job_id, log="\n".join(linhas[-150:]))
 
-    def atualizar_progresso(indice: int, total: int) -> None:
+    def atualizar_progresso(atual: int, inicio: int, fim: int) -> None:
         nonlocal progresso_atual
         if _cancelado():
             raise ExecucaoCancelada()
-        percentual = 10 + int((indice / max(total, 1)) * 85)
+        total = max(fim - inicio + 1, 1)
+        percentual = 10 + int((min(max(atual - inicio, 0), total) / total) * 85)
         if percentual >= progresso_atual + 4 or percentual >= 99:
             progresso_atual = min(percentual, 99)
             _atualizar(
@@ -248,6 +311,20 @@ def executar(job_id: str) -> None:
             finished_at=None,
             log="Consultando o ADN...",
         )
+
+        # cnpjConsulta é obrigatório na prática desde 31/10/2026.
+        empresa_row = maybe_data(
+            client.from_("companies")
+            .select("cnpj")
+            .eq("id", empresa)
+            .maybe_single()
+            .execute()
+        )
+        cnpj = re.sub(r"\D", "", str((empresa_row or {}).get("cnpj") or ""))
+        if len(cnpj) != 14:
+            falhar("CNPJ da empresa não configurado. Atualize o cadastro para buscar NFS-e.")
+            return
+
         estado = maybe_data(
             client.from_("nfse_sync_state")
             .select("ultimo_nsu")
@@ -275,101 +352,146 @@ def executar(job_id: str) -> None:
         if nsu_fim_solicitado and nsu_fim_solicitado > fim:
             log(f"  Limite de {MAX_NSU_POR_EXECUCAO} NSUs por busca; paramos no {fim}.")
 
-        cliente_adn = nfse_adn.AdnClient(empresa)
-        total = fim - inicio + 1
+        try:
+            cliente_adn = nfse_adn.AdnClient(empresa, cnpj)
+        except Exception:  # noqa: BLE001 - certificado/configuração
+            logger.exception("job NFS-e %s: falha ao abrir o certificado", job_id)
+            falhar(
+                "Não foi possível abrir o certificado A1 da empresa. "
+                "Confira o certificado e tente novamente."
+            )
+            return
+
         ultimo_ok = ultimo
         parou_em: int | None = None
+        nsu = inicio
 
-        for indice, nsu in enumerate(range(inicio, fim + 1), start=1):
+        while nsu <= fim:
             if _cancelado():
                 raise ExecucaoCancelada()
 
             try:
-                xml = _buscar_documento(cliente_adn, nsu, _cancelado)
+                resposta = _consultar(cliente_adn, nsu, _cancelado)
             except nfse_adn.AdnError as exc:
-                if exc.status in (204, 404):
-                    log(f"[{nsu}] sem documento")
-                    ultimo_ok = nsu
-                    _salvar_estado(client, empresa, nsu)
-                else:
-                    erros += 1
-                    log(f"[{nsu}] erro: {exc}")
-                    parou_em = nsu
-                    break
-            else:
-                try:
-                    documento = nfse_adn.interpretar_documento(xml, nsu)
-                except nfse_adn.AdnError as exc:
-                    erros += 1
-                    log(f"[{nsu}] XML inválido: {exc}")
-                    parou_em = nsu
+                erros += 1
+                log(f"[{nsu}] erro: {exc}")
+                parou_em = nsu
+                break
+
+            if resposta.vazia:
+                # Fim da fila. Não avança o último NSU: notas futuras podem
+                # receber exatamente este NSU na próxima consulta.
+                log(f"[{nsu}] sem documentos novos")
+                break
+
+            processados = 0
+            for item in resposta.itens:
+                if _cancelado():
+                    raise ExecucaoCancelada()
+
+                item_nsu = item.nsu or nsu
+                if item_nsu < nsu:
+                    continue
+                if item_nsu > fim:
                     break
 
-                eventos = b""
-                if documento.chave:
+                mensagem_log = ""
+                if item.eh_evento:
+                    if _processar_evento(client, empresa, item):
+                        mensagem_log = f"[{item_nsu}] evento registrado"
+                    else:
+                        mensagem_log = f"[{item_nsu}] evento sem nota correspondente"
+                elif not item.eh_nfse:
+                    # DPS, pedido de registro de evento, CNC etc. não são notas.
+                    # Consome o NSU para a fila não travar neles.
+                    mensagem_log = (
+                        f"[{item_nsu}] {item.tipo_documento or 'documento'} ignorado"
+                    )
+                else:
                     try:
-                        eventos = cliente_adn.eventos(documento.chave)
-                    except nfse_adn.AdnError:
-                        eventos = b""  # eventos são complementares
+                        documento = nfse_adn.interpretar_documento(item.xml, item_nsu)
+                    except nfse_adn.AdnError as exc:
+                        erros += 1
+                        log(f"[{item_nsu}] XML inválido: {exc}")
+                        parou_em = item_nsu
+                        break
 
-                cancelada = documento.cancelada or nfse_adn.tem_cancelamento(eventos)
-                caminho = f"{empresa}/nfse/{nsu}.xml"
-                try:
-                    client.storage.from_(settings.storage_bucket).upload(
-                        caminho,
-                        xml,
-                        {"upsert": "true", "content-type": "application/xml"},
+                    chave = item.chave or documento.chave
+                    caminho = f"{empresa}/nfse/{item_nsu}.xml"
+                    try:
+                        client.storage.from_(settings.storage_bucket).upload(
+                            caminho,
+                            item.xml,
+                            {"upsert": "true", "content-type": "application/xml"},
+                        )
+                    except Exception as exc:  # noqa: BLE001 - Storage é infraestrutura
+                        erros += 1
+                        logger.warning(
+                            "job NFS-e %s: Storage falhou no NSU %s: %s",
+                            job_id,
+                            item_nsu,
+                            exc,
+                        )
+                        log(f"[{item_nsu}] não foi possível guardar o XML")
+                        parou_em = item_nsu
+                        break
+
+                    linha = {
+                        "company_id": empresa,
+                        "nsu": item_nsu,
+                        "chave": chave or f"NSU-{item_nsu}",
+                        "numero": documento.numero,
+                        "serie": documento.serie,
+                        "emitida_em": documento.emitida_em or item.data_geracao,
+                        "valor": documento.valor,
+                        "situacao": "cancelada" if documento.cancelada else "autorizada",
+                        "prestador_cnpj": documento.prestador_cnpj,
+                        "tomador_cnpj": documento.tomador_cnpj,
+                        "storage_path": caminho,
+                        "updated_at": _agora(),
+                    }
+                    existente = maybe_data(
+                        client.from_("nfse_notes")
+                        .select("id, situacao")
+                        .eq("company_id", empresa)
+                        .eq("nsu", item_nsu)
+                        .maybe_single()
+                        .execute()
                     )
-                except Exception as exc:  # noqa: BLE001 - Storage é infraestrutura
-                    erros += 1
-                    logger.warning(
-                        "job NFS-e %s: Storage falhou no NSU %s: %s", job_id, nsu, exc
+                    if existente:
+                        # Um cancelamento já registrado não volta para autorizada
+                        # se a nota for consultada de novo.
+                        if existente.get("situacao") == "cancelada":
+                            linha["situacao"] = "cancelada"
+                        client.from_("nfse_notes").update(linha).eq(
+                            "id", existente["id"]
+                        ).execute()
+                        ja_existiam += 1
+                    else:
+                        client.from_("nfse_notes").insert(linha).execute()
+                        baixadas += 1
+
+                    data = formatar_data(documento.emitida_em or item.data_geracao)
+                    mensagem_log = (
+                        f"[{item_nsu}] baixada do dia {data}"
+                        if data
+                        else f"[{item_nsu}] baixada"
                     )
-                    log(f"[{nsu}] não foi possível guardar o XML")
-                    parou_em = nsu
-                    break
 
-                linha = {
-                    "company_id": empresa,
-                    "nsu": nsu,
-                    "chave": documento.chave or f"NSU-{nsu}",
-                    "numero": documento.numero,
-                    "serie": documento.serie,
-                    "emitida_em": documento.emitida_em,
-                    "valor": documento.valor,
-                    "situacao": "cancelada" if cancelada else "autorizada",
-                    "prestador_cnpj": documento.prestador_cnpj,
-                    "tomador_cnpj": documento.tomador_cnpj,
-                    "storage_path": caminho,
-                    "eventos": eventos.decode("utf-8", errors="ignore") or None,
-                    "updated_at": _agora(),
-                }
-                existente = maybe_data(
-                    client.from_("nfse_notes")
-                    .select("id")
-                    .eq("company_id", empresa)
-                    .eq("nsu", nsu)
-                    .maybe_single()
-                    .execute()
-                )
-                if existente:
-                    client.from_("nfse_notes").update(linha).eq(
-                        "id", existente["id"]
-                    ).execute()
-                    ja_existiam += 1
-                else:
-                    client.from_("nfse_notes").insert(linha).execute()
-                    baixadas += 1
+                # Só avança o "último NSU" depois que o item foi aplicado.
+                # O log/cancelamento vem depois: a nota já está salva se o
+                # usuário sair exatamente neste ponto.
+                ultimo_ok = item_nsu
+                _salvar_estado(client, empresa, item_nsu)
+                nsu = item_nsu + 1
+                processados += 1
+                log(mensagem_log)
+                atualizar_progresso(nsu, inicio, fim)
 
-                # Só avança o "último NSU" depois que o XML e o registro estão salvos.
-                ultimo_ok = nsu
-                _salvar_estado(client, empresa, nsu)
-                data = formatar_data(documento.emitida_em)
-                log(f"[{nsu}] baixada do dia {data}" if data else f"[{nsu}] baixada")
-                if cancelada:
-                    log("        + cancelada")
-
-            atualizar_progresso(indice, total)
+            if parou_em is not None:
+                break
+            if processados == 0:
+                break
 
         status_final = "concluido" if erros == 0 else "com_erros"
         mensagem = f"{baixadas} nota(s) nova(s) até o NSU {ultimo_ok}."
@@ -403,7 +525,7 @@ def executar(job_id: str) -> None:
         logger.info("job NFS-e %s pausado para continuar", job_id)
     except ExecucaoCancelada:
         logger.info("job NFS-e %s encerrado pelo usuário", job_id)
-    except Exception as exc:  # noqa: BLE001 - traduz falha para o usuário
+    except Exception:  # noqa: BLE001 - traduz falha para o usuário
         logger.exception("job NFS-e %s falhou", job_id)
         _atualizar(
             job_id,
