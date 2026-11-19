@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 
 from app.config import settings
 from app.security import get_current_user
@@ -11,7 +12,7 @@ from app.services.supabase_client import get_supabase_admin, maybe_data
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
-SELECT = "id, company_id, chave, numero, serie, modelo, emitida_em, valor, situacao, client_name, companies(razao_social)"
+SELECT = "id, company_id, chave, numero, serie, modelo, emitida_em, valor, situacao, client_name, storage_path, companies(razao_social)"
 
 
 def _guard() -> None:
@@ -58,5 +59,31 @@ def detalhar_nota(note_id: str, user: dict = Depends(get_current_user)) -> dict:
     if ids is not None and str(note.get("company_id")) not in ids:
         raise HTTPException(status_code=403, detail="Sem acesso a esta nota.")
 
-    # TODO: incluir eventos (timeline), URL assinada do DANFE e tradução de rejeições.
     return note
+
+
+@router.get("/{note_id}/xml")
+def baixar_xml(note_id: str, user: dict = Depends(get_current_user)) -> Response:
+    """Devolve o XML original da NFC-e guardado no Storage pelo download."""
+    _guard()
+    note = detalhar_nota(note_id, user)  # valida existência, acesso e escopo
+    caminho = note.get("storage_path")
+    if not caminho:
+        raise HTTPException(
+            status_code=404,
+            detail="Esta nota não possui XML armazenado. Baixe o período novamente.",
+        )
+
+    try:
+        conteudo = get_supabase_admin().storage.from_(settings.storage_bucket).download(str(caminho))
+    except Exception as exc:  # noqa: BLE001 - Storage é infra, não regra fiscal
+        raise HTTPException(
+            status_code=404, detail="Não foi possível localizar o XML no servidor."
+        ) from exc
+
+    nome = str(caminho).rsplit("/", 1)[-1] or f"NFCe-{note_id}.xml"
+    return Response(
+        content=conteudo,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+    )

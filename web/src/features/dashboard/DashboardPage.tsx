@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, StatusBadge, Table, useToast, type Column } from '@/design-system'
+import { Button, Card, StatusBadge, Table, type Column } from '@/design-system'
 import { useCompany } from '@/features/empresas/CompanyProvider'
 import { useCountUp } from '@/hooks/useCountUp'
 import { formatCurrency, formatDate } from '@/lib/masks'
@@ -92,7 +92,6 @@ function variation(current: number, previous: number) {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { info } = useToast()
   const { selectedCompany, selectedCompanyId } = useCompany()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
@@ -248,23 +247,13 @@ export function DashboardPage() {
         </Card>
 
         <Card className="p-5">
-          <h2 className="text-sm font-semibold text-txt-primary">Status do serviço</h2>
-          <p className="mt-0.5 text-xs text-txt-muted">Integração fiscal</p>
-          <div className="mt-5 flex items-center gap-3 rounded-sm border border-line bg-subtle p-3">
-            <span className="h-2.5 w-2.5 rounded-full bg-warning" aria-hidden="true" />
-            <div>
-              <p className="text-sm font-medium text-txt-primary">SEFAZ-SP</p>
-              <p className="text-xs text-txt-muted">Homologação • a verificar</p>
-            </div>
-          </div>
+          <h2 className="text-sm font-semibold text-txt-primary">Dados da empresa</h2>
+          <p className="mt-0.5 text-xs text-txt-muted">Referência da empresa selecionada.</p>
           <dl className="mt-4 space-y-2 text-sm text-txt-secondary">
             <div className="flex justify-between"><dt>Modelo</dt><dd className="font-medium text-txt-primary">NFC-e (65)</dd></div>
             <div className="flex justify-between"><dt>Empresa</dt><dd className="truncate pl-2 font-medium text-txt-primary">{selectedCompany.nomeExibicao || selectedCompany.razaoSocial}</dd></div>
             <div className="flex justify-between"><dt>Validade do certificado</dt><dd className="font-medium text-txt-primary">{selectedCompany.certValidade ? formatDate(selectedCompany.certValidade) : '—'}</dd></div>
           </dl>
-          <Button variant="secondary" size="sm" fullWidth className="mt-5" onClick={() => info('Consulta disponível ao executar o download.')}>
-            <Download className="h-4 w-4" /> Consultar status
-          </Button>
         </Card>
       </section>
     </div>

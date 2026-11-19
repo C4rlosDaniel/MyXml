@@ -1,6 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
-  Copy,
   Download,
   FileSearch,
   MoreHorizontal,
@@ -46,7 +45,7 @@ const selectClass =
 
 export function NotesPage() {
   const navigate = useNavigate()
-  const { info } = useToast()
+  const { success, error: showError } = useToast()
   const { selectedCompany, selectedCompanyId } = useCompany()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,6 +55,15 @@ export function NotesPage() {
   const [sort, setSort] = useState('emissao-desc')
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  const baixarXml = async (noteId: string) => {
+    try {
+      await notesService.downloadXml(noteId)
+      success('XML baixado!', 'Enviado para a pasta Downloads do navegador.')
+    } catch (err) {
+      showError('Não foi possível baixar o XML', err instanceof Error ? err.message : undefined)
+    }
+  }
 
   useEffect(() => {
     notesService.list().then((data) => {
@@ -208,15 +216,9 @@ export function NotesPage() {
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-hover"
-                onSelect={() => info('Download disponível na Etapa 3.', 'O XML/DANFE virá do Storage.')}
+                onSelect={() => void baixarXml(row.id)}
               >
-                <Download className="h-4 w-4" /> Baixar XML / DANFE
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-hover"
-                onSelect={() => info('Duplicação disponível na Etapa 3.')}
-              >
-                <Copy className="h-4 w-4" /> Duplicar
+                <Download className="h-4 w-4" /> Baixar XML
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -315,9 +317,6 @@ export function NotesPage() {
               {selected.size} {selected.size === 1 ? 'nota selecionada' : 'notas selecionadas'}
             </span>
             <div className="flex gap-2">
-              <Button size="sm" variant="secondary" onClick={() => info('Exportação disponível na Etapa 4.')}>
-                Exportar
-              </Button>
               <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
                 Limpar seleção
               </Button>

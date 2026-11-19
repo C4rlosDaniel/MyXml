@@ -1,5 +1,6 @@
 import type { Note, NoteStatus } from '@/types'
-import { isMockMode } from './config'
+import { apiDownload } from './api.client'
+import { isApiConfigured, isMockMode } from './config'
 import { supabase } from './supabase'
 
 /* ============================================================
@@ -111,5 +112,11 @@ export const notesService = {
 
     await delay(150)
     return mockNotes.find((note) => note.id === id) ?? null
+  },
+
+  /** Baixa o XML original da nota, lido do Storage pela API. */
+  async downloadXml(noteId: string): Promise<void> {
+    if (!isApiConfigured) throw new Error('Configure a API para baixar o XML da nota.')
+    await apiDownload(`/notes/${noteId}/xml`, `NFCe-${noteId}.xml`)
   },
 }

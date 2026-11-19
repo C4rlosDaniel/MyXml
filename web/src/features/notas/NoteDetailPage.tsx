@@ -45,9 +45,10 @@ function buildTimeline(note: Note): TimelineStep[] {
 export function NoteDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { info, success } = useToast()
+  const { info, success, error: showError } = useToast()
   const [note, setNote] = useState<Note | null>(null)
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -79,6 +80,18 @@ export function NoteDetailPage() {
     }
   }
 
+  const downloadXml = async () => {
+    setDownloading(true)
+    try {
+      await notesService.downloadXml(note.id)
+      success('XML baixado!', 'Enviado para a pasta Downloads do navegador.')
+    } catch (err) {
+      showError('Não foi possível baixar o XML', err instanceof Error ? err.message : undefined)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <div>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -99,8 +112,8 @@ export function NoteDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={() => info('Download disponível na Etapa 4.')}>
-            <Download className="h-4 w-4" /> Baixar XML/DANFE
+          <Button variant="secondary" loading={downloading} loadingText="Baixando..." onClick={downloadXml}>
+            <Download className="h-4 w-4" /> Baixar XML
           </Button>
         </div>
       </header>
@@ -147,25 +160,6 @@ export function NoteDetailPage() {
                 <Button variant="ghost" size="sm" onClick={copyKey}>
                   <Copy className="h-3.5 w-3.5" /> Copiar
                 </Button>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-txt-primary">Pré-visualização do DANFE</h2>
-            <p className="mt-0.5 text-xs text-txt-muted">Demonstração — o PDF real vem do backend.</p>
-            <div className="mx-auto mt-4 max-w-md rounded-sm border border-line bg-white p-6 shadow-xs">
-              <div className="flex items-center justify-between border-b border-line pb-3">
-                <span className="text-sm font-bold text-slate-900">DANFE NFC-e</span>
-                <span className="text-xs text-slate-500">Nº {note.numero} • Série {note.serie}</span>
-              </div>
-              <div className="mt-4 text-xs text-slate-600">
-                <p><strong>Cliente:</strong> {note.clientName ?? '—'}</p>
-                <p className="mt-2"><strong>Emissão:</strong> {formatDate(note.emitidaEm, true)}</p>
-                <p className="mt-2"><strong>Valor total:</strong> {formatCurrency(note.valor)}</p>
-              </div>
-              <div className="mt-6 border-t border-line pt-3 font-mono text-[10px] break-all text-slate-500">
-                {note.chave}
               </div>
             </div>
           </Card>
