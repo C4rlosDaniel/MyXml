@@ -41,6 +41,8 @@ export function NfsePage() {
   const runIdRef = useRef(0)
   const pollingRef = useRef(false)
   const jobIdRef = useRef<string | null>(null)
+  const resumingRef = useRef(false)
+  const resumeCountRef = useRef(0)
 
   useEffect(() => {
     if (selectedCompanyId) setCompanyId(selectedCompanyId)
@@ -53,12 +55,12 @@ export function NfsePage() {
   }, [])
 
   const carregarNotas = () => {
-    nfseService.list().then(setNotes).catch(() => undefined)
+    nfseService.list(companyId || undefined).then(setNotes).catch(() => undefined)
   }
 
   useEffect(() => {
-    carregarNotas()
-  }, [])
+    nfseService.list(companyId || undefined).then(setNotes).catch(() => undefined)
+  }, [companyId])
 
   useEffect(() => {
     const elemento = logRef.current
@@ -102,6 +104,8 @@ export function NfsePage() {
 
     startRef.current = true
     finishedRef.current = false
+    resumingRef.current = false
+    resumeCountRef.current = 0
     pararTimers()
     const runId = ++runIdRef.current
     setRunning(true)
@@ -135,6 +139,36 @@ export function NfsePage() {
         if (runId !== runIdRef.current) return
         setProgress(job.progresso ?? 0)
         if (job.log) setLog(String(job.log).split('\n').filter(Boolean))
+
+        // O servidor pausa a etapa para não estourar limites da plataforma.
+        // Retomamos automaticamente, sem o usuário precisar clicar de novo.
+        if (job.status === 'interrompido') {
+          if (resumingRef.current) return
+          if (resumeCountRef.current >= 20) {
+            pararTimers()
+            startRef.current = false
+            setRunning(false)
+            endDownload()
+            if (finishedRef.current) return
+            finishedRef.current = true
+            showError(
+              'Busca pausada',
+              'Não foi possível retomar automaticamente. Use "Buscar NFS-e" para continuar.',
+            )
+            return
+          }
+          resumeCountRef.current += 1
+          resumingRef.current = true
+          void nfseService
+            .resumeJob(jobId)
+            .catch(() => undefined)
+            .finally(() => {
+              resumingRef.current = false
+            })
+          return
+        }
+        resumingRef.current = false
+
         if (job.status !== 'executando') {
           pararTimers()
           startRef.current = false
@@ -144,6 +178,11 @@ export function NfsePage() {
             finishedRef.current = true
             if (job.status === 'concluido') {
               success('Busca concluída!', `${job.baixadas} NFS-e nova(s).`)
+            } else if (job.status === 'com_erros' && job.baixadas > 0) {
+              info(
+                'Busca parcial',
+                `${job.baixadas} NFS-e nova(s). ${job.mensagem ?? ''}`.trim(),
+              )
             } else {
               showError('Busca não concluída', job.mensagem ?? 'Tente novamente.')
             }

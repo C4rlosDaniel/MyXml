@@ -22,7 +22,7 @@ export interface NfseNote {
 
 export interface NfseJob {
   id: string
-  status: 'executando' | 'concluido' | 'com_erros' | 'falhou'
+  status: 'executando' | 'concluido' | 'com_erros' | 'falhou' | 'interrompido'
   progresso: number
   baixadas: number
   ja_existiam: number
@@ -115,6 +115,10 @@ export const nfseService = {
 
   async cancelJob(jobId: string): Promise<void> {
     await apiRequest(`/nfse/downloads/${jobId}/cancel`, { method: 'POST' })
+  },
+
+  async resumeJob(jobId: string): Promise<void> {
+    await apiRequest(`/nfse/downloads/${jobId}/run`, { method: 'POST' })
   },
 
   async downloadXml(noteId: string): Promise<void> {

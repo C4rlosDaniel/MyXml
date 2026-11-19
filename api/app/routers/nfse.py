@@ -110,6 +110,9 @@ def iniciar_busca(
         raise HTTPException(status_code=422, detail="Empresa não informada.")
     _acesso(empresa, user, client)
 
+    # Uma máquina que reiniciou no meio deixa o job preso em "executando".
+    # Marcamos como interrompido para liberar uma nova busca (que retoma do NSU).
+    nfse_runner.marcar_interrompidas(empresa)
     em_andamento = (
         client.from_("nfse_download_runs")
         .select("id")
@@ -126,6 +129,12 @@ def iniciar_busca(
     nsu_fim = int(payload.get("nsu_fim") or 0)
     if nsu_ini < 0 or nsu_fim < 0:
         raise HTTPException(status_code=422, detail="NSU inválido.")
+    if nsu_ini > 10_000_000 or nsu_fim > 10_000_000:
+        raise HTTPException(status_code=422, detail="NSU fora do intervalo permitido.")
+    if nsu_ini and nsu_fim and nsu_fim < nsu_ini:
+        raise HTTPException(
+            status_code=422, detail="O NSU final não pode ser menor que o inicial."
+        )
 
     job = client.from_("nfse_download_runs").insert({
         "company_id": empresa,
@@ -150,7 +159,65 @@ def status_busca(job_id: str, user: dict = Depends(get_current_user)) -> dict:
     if not job:
         raise HTTPException(status_code=404, detail="Execução não encontrada.")
     _acesso(str(job["company_id"]), user, client)
+
+    # Job sem sinal de vida vira "interrompido" para o front poder retomar.
+    if job.get("status") == "executando" and nfse_runner.sem_sinal(
+        job.get("atualizado_em"), nfse_runner.SEGUNDOS_SEM_SINAL
+    ):
+        nfse_runner.marcar_interrompidas(str(job["company_id"]))
+        job = maybe_data(
+            client.from_("nfse_download_runs")
+            .select("*")
+            .eq("id", job_id)
+            .maybe_single()
+            .execute()
+        ) or job
     return job
+
+
+@router.post("/downloads/{job_id}/run", response_model=MessageOut)
+def retomar_busca(
+    job_id: str,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """Retoma uma busca pausada/falha de onde parou (último NSU salvo)."""
+    _guard_download()
+    job = status_busca(job_id, user)
+    if job.get("status") == "executando":
+        raise HTTPException(status_code=409, detail="Esta busca já está em andamento.")
+
+    client = get_supabase_admin()
+    empresa = str(job["company_id"])
+    nfse_runner.marcar_interrompidas(empresa)
+    outro = (
+        client.from_("nfse_download_runs")
+        .select("id, atualizado_em")
+        .eq("company_id", empresa)
+        .eq("status", "executando")
+        .neq("id", job_id)
+        .execute()
+        .data
+        or []
+    )
+    if any(
+        not nfse_runner.sem_sinal(
+            linha.get("atualizado_em"), nfse_runner.SEGUNDOS_SEM_SINAL
+        )
+        for linha in outro
+    ):
+        raise HTTPException(
+            status_code=409, detail="Já existe uma busca NFS-e em andamento para esta empresa."
+        )
+
+    client.from_("nfse_download_runs").update({
+        "status": "executando",
+        "mensagem": None,
+        "finished_at": None,
+        "atualizado_em": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", job_id).execute()
+    background_tasks.add_task(nfse_runner.executar, job_id)
+    return {"message": "Busca retomada."}
 
 
 @router.post("/downloads/{job_id}/cancel", response_model=MessageOut)
@@ -160,7 +227,8 @@ def cancelar_busca(job_id: str, user: dict = Depends(get_current_user)) -> dict:
         return {"message": "Esta execução já havia terminado."}
     get_supabase_admin().from_("nfse_download_runs").update({
         "status": "falhou",
-        "mensagem": "Busca encerrada: o usuário saiu da tela de NFS-e.",
+        "mensagem": "Busca encerrada. O que já foi baixado está salvo.",
         "finished_at": datetime.now(timezone.utc).isoformat(),
+        "atualizado_em": datetime.now(timezone.utc).isoformat(),
     }).eq("id", job_id).execute()
     return {"message": "Busca encerrada."}
