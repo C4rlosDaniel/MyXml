@@ -14,6 +14,25 @@ const sampleXml = (number: string) => `<?xml version="1.0" encoding="UTF-8"?>
   </infNFe></NFe>
 </nfeProc>`
 
+function progressoDoLog(linhas: string[]): { atual: number; total: number } | null {
+  for (let i = linhas.length - 1; i >= 0; i -= 1) {
+    const encontrado = linhas[i].match(/\[(\d+)\/(\d+)\]/)
+    if (encontrado) return { atual: Number(encontrado[1]), total: Number(encontrado[2]) }
+  }
+  return null
+}
+
+function formatarLinhaLog(linha: string): string {
+  // O log do core traz a chave de 44 dígitos; nela os caracteres 2..8 são AAMMDD.
+  const encontrado = linha.match(/^(\[\d+\/\d+\]\s+baixada\s+)(\d{44})$/)
+  if (!encontrado) return linha
+  const chave = encontrado[2]
+  const ano = 2000 + Number(chave.slice(2, 4))
+  const mes = chave.slice(4, 6)
+  const dia = chave.slice(6, 8)
+  return `${encontrado[1]}do dia ${dia}/${mes}/${ano}`
+}
+
 export function DownloadPage() {
   const { info, success, error: showError } = useToast()
   const { selectedCompanyId, selectCompany } = useCompany()
@@ -27,6 +46,13 @@ export function DownloadPage() {
   const timer = useRef<number | null>(null)
   const pollTimer = useRef<number | null>(null)
   const jobIdRef = useRef<string | null>(null)
+  const logRef = useRef<HTMLDivElement | null>(null)
+
+  // Mantém a última nota baixada sempre visível dentro do card.
+  useEffect(() => {
+    const elemento = logRef.current
+    if (elemento) elemento.scrollTop = elemento.scrollHeight
+  }, [log])
 
   useEffect(() => {
     cadastrosService.listCompanies().then((data) => {
@@ -128,6 +154,8 @@ export function DownloadPage() {
     }, 120)
   }
 
+  const notasBaixadas = progressoDoLog(log)
+
   return (
     <div>
       <header className="mb-6">
@@ -187,19 +215,31 @@ export function DownloadPage() {
         </Card>
 
         <Card className="p-5 lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-txt-primary">Andamento</h2>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-txt-primary">Andamento</h2>
+              <p className="mt-0.5 text-xs text-txt-muted">
+                {notasBaixadas
+                  ? `${notasBaixadas.atual} de ${notasBaixadas.total} notas baixadas`
+                  : 'Aguardando a SEFAZ...'}
+              </p>
+            </div>
             <span className="tabular text-xs text-txt-muted">{progress}%</span>
           </div>
           <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-line">
             <div className="h-full rounded-full bg-accent transition-[width] duration-150" style={{ width: `${progress}%` }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso do download" />
           </div>
 
-          <div className="mt-5 min-h-48 rounded-sm border border-line bg-subtle p-4 font-mono text-xs text-txt-secondary">
+          <div
+            ref={logRef}
+            className="mt-5 max-h-56 min-h-32 overflow-y-auto rounded-sm border border-line bg-subtle p-4 font-mono text-xs text-txt-secondary"
+          >
             {log.length === 0 ? (
               <p className="text-txt-muted">O log da execução aparecerá aqui.</p>
             ) : (
-              log.map((line, index) => <p key={index} className="mb-1">{line}</p>)
+              log.map((line, index) => (
+                <p key={index} className="mb-1">{formatarLinhaLog(line)}</p>
+              ))
             )}
           </div>
 

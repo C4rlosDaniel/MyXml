@@ -76,6 +76,28 @@ def executar(job_id: str) -> None:
     if not job:
         return
 
+    # Segunda barreira: duas requisições concorrentes podem passar pela checagem
+    # do router ao mesmo tempo. A SEFAZ devolve 656 e pode bloquear o cliente.
+    outro = (
+        client.from_("download_runs")
+        .select("id")
+        .eq("company_id", str(job["company_id"]))
+        .eq("status", "executando")
+        .neq("id", job_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    if outro:
+        _atualizar_job(
+            job_id,
+            status="falhou",
+            mensagem="Já existia outro download em andamento para esta empresa. "
+            "Tente novamente quando ele terminar.",
+            finished_at=datetime.now(timezone.utc).isoformat(),
+        )
+        return
+
     try:
         _atualizar_job(job_id, status="executando", progresso=5, log="Iniciando download na nuvem...")
         pfx_bytes, senha = certificate_vault.load(str(job["company_id"]))

@@ -56,6 +56,24 @@ def iniciar_download(
     if ids is not None and company_id not in ids:
         raise HTTPException(status_code=403, detail="Sem acesso a esta empresa.")
 
+    # A SEFAZ limita chamadas simultâneas com o mesmo certificado (código 656)
+    # e pode bloquear o contribuinte. Uma execução por empresa por vez.
+    em_andamento = (
+        client.from_("download_runs")
+        .select("id")
+        .eq("company_id", company_id)
+        .eq("status", "executando")
+        .limit(1)
+        .execute()
+        .data
+    )
+    if em_andamento:
+        raise HTTPException(
+            status_code=409,
+            detail="Já existe um download em andamento para esta empresa. "
+            "Aguarde-o terminar para não bloquear a SEFAZ.",
+        )
+
     start, end = _period_bounds(payload.get("period"))
     response = client.from_("download_runs").insert({
         "company_id": company_id,
