@@ -1,10 +1,8 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
-  Ban,
   Copy,
   Download,
   FileSearch,
-  Mail,
   MoreHorizontal,
   Plus,
   Search,
@@ -48,7 +46,7 @@ const selectClass =
 
 export function NotesPage() {
   const navigate = useNavigate()
-  const { info, warning } = useToast()
+  const { info } = useToast()
   const { selectedCompany, selectedCompanyId } = useCompany()
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
@@ -216,22 +214,9 @@ export function NotesPage() {
               </DropdownMenu.Item>
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-hover"
-                onSelect={() => info('Reenvio disponível na Etapa 3.')}
-              >
-                <Mail className="h-4 w-4" /> Reenviar e-mail
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-hover"
                 onSelect={() => info('Duplicação disponível na Etapa 3.')}
               >
                 <Copy className="h-4 w-4" /> Duplicar
-              </DropdownMenu.Item>
-              <DropdownMenu.Separator className="my-1 h-px bg-line" />
-              <DropdownMenu.Item
-                className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm text-danger-fg outline-none data-[highlighted]:bg-danger-soft"
-                onSelect={() => warning('Cancelamento na Etapa 4.', 'Será um modal com confirmação e prazo.')}
-              >
-                <Ban className="h-4 w-4" /> Cancelar
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>

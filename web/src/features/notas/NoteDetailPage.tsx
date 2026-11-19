@@ -4,10 +4,7 @@ import {
   CheckCircle2,
   Copy,
   Download,
-  FilePenLine,
   FileText,
-  Hash,
-  Mail,
   RefreshCw,
   Send,
   XCircle,
@@ -16,7 +13,6 @@ import {
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button, Card, StatusBadge, useToast } from '@/design-system'
-import { FiscalActionModals, type FiscalAction } from '@/features/fiscal/FiscalActionModals'
 import { formatChaveNfe, formatCurrency, formatDate } from '@/lib/masks'
 import { notesService } from '@/services/notes.service'
 import type { Note } from '@/types'
@@ -52,7 +48,6 @@ export function NoteDetailPage() {
   const { info, success } = useToast()
   const [note, setNote] = useState<Note | null>(null)
   const [loading, setLoading] = useState(true)
-  const [fiscalAction, setFiscalAction] = useState<FiscalAction | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -107,38 +102,18 @@ export function NoteDetailPage() {
           <Button variant="secondary" onClick={() => info('Download disponível na Etapa 4.')}>
             <Download className="h-4 w-4" /> Baixar XML/DANFE
           </Button>
-          <Button variant="secondary" onClick={() => info('Envio disponível na Etapa 4.')}>
-            <Mail className="h-4 w-4" /> Reenviar e-mail
-          </Button>
         </div>
       </header>
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        <Button variant="secondary" size="sm" onClick={() => setFiscalAction('cancelamento')}>
-          <Ban className="h-4 w-4" /> Cancelar nota
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setFiscalAction('carta-correcao')}>
-          <FilePenLine className="h-4 w-4" /> Carta de Correção
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setFiscalAction('inutilizacao')}>
-          <Hash className="h-4 w-4" /> Inutilizar numeração
-        </Button>
-      </div>
-
       {note.situacao === 'rejeitada' && (
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3 rounded-md border border-danger-border bg-danger-soft p-4">
-          <div className="flex gap-3">
-            <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger-fg" />
-            <div>
-              <p className="text-sm font-semibold text-danger-fg">Nota rejeitada pela SEFAZ</p>
-              <p className="mt-1 text-sm text-txt-secondary">
-                Código 999 — rejeição simulada para demonstração. Tradução: confira os dados do destinatário e tente novamente.
-              </p>
-            </div>
+        <div className="mb-5 flex items-start gap-3 rounded-md border border-danger-border bg-danger-soft p-4">
+          <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger-fg" />
+          <div>
+            <p className="text-sm font-semibold text-danger-fg">Nota rejeitada pela SEFAZ</p>
+            <p className="mt-1 text-sm text-txt-secondary">
+              Código 999 — rejeição simulada para demonstração. Tradução: confira os dados do destinatário e tente novamente.
+            </p>
           </div>
-          <Button size="sm" onClick={() => info('Correção disponível na Etapa 4.')}>
-            <RefreshCw className="h-4 w-4" /> Corrigir e reenviar
-          </Button>
         </div>
       )}
 
@@ -226,12 +201,6 @@ export function NoteDetailPage() {
           </ol>
         </Card>
       </div>
-
-      <FiscalActionModals
-        action={fiscalAction}
-        note={note}
-        onOpenChange={(open) => !open && setFiscalAction(null)}
-      />
     </div>
   )
 }
