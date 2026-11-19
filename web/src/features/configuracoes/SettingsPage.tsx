@@ -1,18 +1,81 @@
-import { BadgeCheck, Save, Settings2, ShieldCheck, Upload } from 'lucide-react'
-import { useState } from 'react'
+import { BadgeCheck, CheckCircle2, Save, Settings2, ShieldCheck, Upload } from 'lucide-react'
+import { useEffect, useState, type ChangeEvent } from 'react'
 import { Button, Card, Input, useToast } from '@/design-system'
-import { isMockMode } from '@/services/config'
+import { useCompany } from '@/features/empresas/CompanyProvider'
+import { formatDate } from '@/lib/masks'
+import { cadastrosService } from '@/services/cadastros.service'
+import { isApiConfigured, isMockMode } from '@/services/config'
+
+interface CertificateStatus {
+  cadastrado: boolean
+  cnpj?: string
+  razaoSocial?: string
+  validade?: string
+  titular?: string
+}
 
 export function SettingsPage() {
-  const { success, info } = useToast()
+  const { success, info, error: showError } = useToast()
+  const { selectedCompany, selectedCompanyId } = useCompany()
   const [serie, setSerie] = useState(localStorage.getItem('myxml-serie') ?? '1')
   const [proximoNumero, setProximoNumero] = useState(localStorage.getItem('myxml-numero') ?? '100')
   const [ambiente, setAmbiente] = useState<'homologacao' | 'producao'>('homologacao')
+  const [certFile, setCertFile] = useState<File | null>(null)
+  const [certPassword, setCertPassword] = useState('')
+  const [certStatus, setCertStatus] = useState<CertificateStatus | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   const save = () => {
     localStorage.setItem('myxml-serie', serie)
     localStorage.setItem('myxml-numero', proximoNumero)
     success('Configurações salvas nesta demonstração.')
+  }
+
+  useEffect(() => {
+    if (!isApiConfigured || !selectedCompanyId) {
+      setCertStatus(null)
+      return
+    }
+    cadastrosService
+      .getCertificateStatus(selectedCompanyId)
+      .then(setCertStatus)
+      .catch(() => setCertStatus(null))
+  }, [selectedCompanyId])
+
+  const onCertFile = (event: ChangeEvent<HTMLInputElement>) => {
+    setCertFile(event.target.files?.[0] ?? null)
+  }
+
+  const sendCertificate = async () => {
+    if (!selectedCompanyId) {
+      info('Selecione uma empresa no topo da tela antes de enviar o certificado.')
+      return
+    }
+    if (!certFile) {
+      showError('Selecione o arquivo .pfx do certificado.')
+      return
+    }
+    if (!certPassword) {
+      showError('Informe a senha do certificado.')
+      return
+    }
+    if (!isApiConfigured) {
+      info('Configure a API para enviar o certificado ao cofre.')
+      return
+    }
+
+    setUploading(true)
+    try {
+      await cadastrosService.uploadCertificate(selectedCompanyId, certFile, certPassword)
+      success('Certificado enviado!', 'Guardado em cofre criptografado no servidor.')
+      setCertPassword('')
+      setCertFile(null)
+      setCertStatus(await cadastrosService.getCertificateStatus(selectedCompanyId))
+    } catch (err) {
+      showError('Não foi possível enviar o certificado', err instanceof Error ? err.message : undefined)
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
@@ -59,12 +122,53 @@ export function SettingsPage() {
             <ShieldCheck className="h-4 w-4" /> Certificado digital A1
           </h2>
           <p className="mt-1 text-xs text-txt-secondary">
-            O certificado é enviado à API e guardado em cofre criptografado no servidor.
+            O certificado é enviado e guardado em cofre criptografado no servidor.
           </p>
-          <div className="mt-4 rounded-sm border border-dashed border-line p-6 text-center">
-            <Upload className="mx-auto h-6 w-6 text-txt-muted" />
-            <p className="mt-2 text-sm text-txt-primary">Nenhum certificado nesta demonstração</p>
-            <Button variant="secondary" size="sm" className="mt-4" onClick={() => info('Upload disponível com a API conectada.')}>Selecionar arquivo .pfx</Button>
+
+          <div className="mt-4 rounded-sm border border-line bg-subtle p-4">
+            <p className="text-xs font-medium text-txt-secondary">Empresa</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-txt-primary">
+              {selectedCompany?.nomeExibicao || selectedCompany?.razaoSocial || 'Nenhuma empresa selecionada'}
+            </p>
+            {certStatus?.cadastrado ? (
+              <div className="mt-3 flex items-start gap-2 rounded-sm border border-success-border bg-success-soft p-3 text-xs text-success-fg">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-semibold">Certificado cadastrado no cofre</p>
+                  <p className="mt-1">Titular: {certStatus.titular || '—'}</p>
+                  <p>CNPJ: {certStatus.cnpj || '—'}</p>
+                  <p>Validade: {certStatus.validade ? formatDate(certStatus.validade) : '—'}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-txt-muted">
+                Certificado não cadastrado para a empresa selecionada.
+              </p>
+            )}
+          </div>
+
+          <div className="mt-4 space-y-3">
+            <div>
+              <label htmlFor="cert-file" className="mb-1.5 block text-xs font-medium text-txt-secondary">
+                Arquivo do certificado (.pfx / .p12)
+              </label>
+              <input
+                id="cert-file"
+                type="file"
+                accept=".pfx,.p12"
+                onChange={onCertFile}
+                className="field h-10 w-full px-3 py-2 text-xs text-txt-secondary focus:border-accent focus:ring-2 focus:ring-accent focus:outline-none"
+              />
+            </div>
+            <Input
+              label="Senha do certificado"
+              type="password"
+              value={certPassword}
+              onChange={(event) => setCertPassword(event.target.value)}
+            />
+            <Button size="sm" loading={uploading} loadingText="Enviando..." onClick={sendCertificate}>
+              <Upload className="h-4 w-4" /> Enviar certificado ao cofre
+            </Button>
           </div>
         </Card>
 

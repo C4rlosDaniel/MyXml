@@ -29,6 +29,7 @@ import { Button } from '@/design-system'
 import { cn } from '@/lib/utils'
 import { isMockMode } from '@/services/config'
 import { useAuth } from '@/features/auth/AuthProvider'
+import { useDownloadGuard } from '@/features/download/DownloadGuard'
 import { useCompany } from '@/features/empresas/CompanyProvider'
 import { CommandPalette, type Command as PaletteCommand } from './CommandPalette'
 
@@ -86,6 +87,7 @@ function ThemeToggle() {
 export function AppShell() {
   const { profile, signOut } = useAuth()
   const { companies, selectedCompany, selectedCompanyId, selectCompany } = useCompany()
+  const { requestNavigation } = useDownloadGuard()
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('myxml-sidebar') === 'collapsed')
@@ -132,7 +134,7 @@ export function AppShell() {
         label: item.label,
         group: group.label,
         icon: item.icon,
-        run: () => navigate(item.to),
+        run: () => requestNavigation(() => navigate(item.to)),
       })),
     )
     return [
@@ -142,15 +144,17 @@ export function AppShell() {
         label: 'Baixar notas agora',
         group: 'Ações',
         icon: Download,
-        run: () => navigate('/baixar'),
+        run: () => requestNavigation(() => navigate('/baixar')),
       },
     ]
-  }, [navGroups, navigate])
+  }, [navGroups, navigate, requestNavigation])
 
-  const handleSignOut = useCallback(async () => {
-    await signOut()
-    navigate('/', { replace: true })
-  }, [signOut, navigate])
+  const handleSignOut = useCallback(() => {
+    requestNavigation(async () => {
+      await signOut()
+      navigate('/', { replace: true })
+    })
+  }, [signOut, navigate, requestNavigation])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -168,7 +172,7 @@ export function AppShell() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') {
         event.preventDefault()
-        navigate('/baixar')
+        requestNavigation(() => navigate('/baixar'))
         return
       }
       if (event.key === '/' && !isTyping) {
@@ -181,12 +185,12 @@ export function AppShell() {
         return
       }
       if (!isTyping && event.key.toLowerCase() === 'd' && Date.now() - lastG.current < 900) {
-        navigate('/')
+        requestNavigation(() => navigate('/'))
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [navigate])
+  }, [navigate, requestNavigation])
 
   const sidebarWidth = collapsed ? 'md:pl-16' : 'md:pl-60'
   const breadcrumbs = getBreadcrumbs(location.pathname)
@@ -207,7 +211,13 @@ export function AppShell() {
                 to={item.to}
                 end={item.end}
                 title={compact ? item.label : undefined}
-                onClick={() => setDrawerOpen(false)}
+                onClick={(event) => {
+                  event.preventDefault()
+                  requestNavigation(() => {
+                    setDrawerOpen(false)
+                    navigate(item.to)
+                  })
+                }}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-3 rounded-sm py-2 text-sm font-medium transition-colors focus-ring',
@@ -363,10 +373,10 @@ export function AppShell() {
                     <DropdownMenu.Item
                       key={company.id}
                       className="flex cursor-pointer items-center justify-between gap-2 rounded-sm px-3 py-2 text-sm outline-none data-[highlighted]:bg-hover"
-                      onSelect={() => {
+                      onSelect={() => requestNavigation(() => {
                         selectCompany(company.id)
                         navigate('/')
-                      }}
+                      })}
                     >
                       <span className="min-w-0">
                         <span className="block truncate font-medium text-txt-primary">
@@ -387,7 +397,7 @@ export function AppShell() {
                   <DropdownMenu.Separator className="my-1 h-px bg-line" />
                   <DropdownMenu.Item
                     className="cursor-pointer rounded-sm px-3 py-2 text-sm text-primary-fg outline-none data-[highlighted]:bg-accent-soft"
-                    onSelect={() => navigate('/empresas')}
+                    onSelect={() => requestNavigation(() => navigate('/empresas'))}
                   >
                     + Gerenciar empresas / certificados
                   </DropdownMenu.Item>
@@ -467,6 +477,10 @@ export function AppShell() {
             key={item.to}
             to={item.to}
             end={item.end}
+            onClick={(event) => {
+              event.preventDefault()
+              requestNavigation(() => navigate(item.to))
+            }}
             className={({ isActive }) =>
               cn('flex min-w-0 flex-1 flex-col items-center gap-1 rounded-sm py-1 text-[11px] font-medium', isActive ? 'text-primary-fg' : 'text-txt-muted')
             }

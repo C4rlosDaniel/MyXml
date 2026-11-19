@@ -2,6 +2,7 @@ import { Download, FileSpreadsheet, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Card, useToast } from '@/design-system'
 import { useCompany } from '@/features/empresas/CompanyProvider'
+import { useDownloadGuard } from '@/features/download/DownloadGuard'
 import { isApiConfigured } from '@/services/config'
 import { cadastrosService, type CompanyRecord } from '@/services/cadastros.service'
 
@@ -36,6 +37,7 @@ function formatarLinhaLog(linha: string): string {
 export function DownloadPage() {
   const { info, success, error: showError } = useToast()
   const { selectedCompanyId, selectCompany } = useCompany()
+  const { beginDownload, endDownload } = useDownloadGuard()
   const [companies, setCompanies] = useState<CompanyRecord[]>([])
   const [companyId, setCompanyId] = useState(selectedCompanyId ?? '')
   const [period, setPeriod] = useState('')
@@ -47,6 +49,11 @@ export function DownloadPage() {
   const pollTimer = useRef<number | null>(null)
   const jobIdRef = useRef<string | null>(null)
   const logRef = useRef<HTMLDivElement | null>(null)
+  // Travas síncronas: evitam dois cliques gerando dois jobs/intervalos de polling.
+  const startRef = useRef(false)
+  const runIdRef = useRef(0)
+  const finishedRef = useRef(false)
+  const pollingRef = useRef(false)
 
   // Mantém a última nota baixada sempre visível dentro do card.
   useEffect(() => {
@@ -67,10 +74,36 @@ export function DownloadPage() {
     if (selectedCompanyId) setCompanyId(selectedCompanyId)
   }, [selectedCompanyId])
 
+  const stopTimers = () => {
+    if (timer.current) {
+      window.clearInterval(timer.current)
+      timer.current = null
+    }
+    if (pollTimer.current) {
+      window.clearInterval(pollTimer.current)
+      pollTimer.current = null
+    }
+  }
+
+  // Encerra o "programa de baixar notas" quando o usuário confirma a saída da aba.
+  const cancelDownload = () => {
+    runIdRef.current += 1
+    stopTimers()
+    startRef.current = false
+    pollingRef.current = false
+    setRunning(false)
+    const jobId = jobIdRef.current
+    jobIdRef.current = null
+    if (isApiConfigured && jobId) {
+      void cadastrosService.cancelDownload(jobId).catch(() => undefined)
+    }
+  }
+
   useEffect(() => () => {
-    if (timer.current) window.clearInterval(timer.current)
-    if (pollTimer.current) window.clearInterval(pollTimer.current)
-  }, [])
+    stopTimers()
+    startRef.current = false
+    endDownload()
+  }, [endDownload])
 
   const saveXmls = async () => {
     // TODO: no backend, gerar os XMLs reais do Supabase Storage e devolver um .zip.
@@ -96,29 +129,60 @@ export function DownloadPage() {
   }
 
   const start = async () => {
+    // Trava síncrona: um clique só inicia uma execução, mesmo antes do estado
+    // "running" ser propagado pelo React. Sem isso, dois jobs simultâneos geram
+    // dois polling e o card de erro aparece repetidas vezes.
+    if (startRef.current || running) return
     if (!companyId || !period) {
       info('Selecione a empresa e o período.')
       return
     }
-    const job = await cadastrosService.startDownload(companyId, period)
-    jobIdRef.current = job.jobId
+
+    startRef.current = true
+    finishedRef.current = false
+    stopTimers()
+    const runId = ++runIdRef.current
     setRunning(true)
     setProgress(0)
     setLog([
       `[${new Date().toLocaleTimeString('pt-BR')}] Consultando SEFAZ-SP...`,
       `[${new Date().toLocaleTimeString('pt-BR')}] Período: ${period}`,
     ])
+    beginDownload(cancelDownload)
+
+    let jobId: string
+    try {
+      const job = await cadastrosService.startDownload(companyId, period)
+      jobId = job.jobId
+    } catch (err) {
+      startRef.current = false
+      setRunning(false)
+      endDownload()
+      showError('Não foi possível iniciar o download', err instanceof Error ? err.message : undefined)
+      return
+    }
+    if (runId !== runIdRef.current) return // usuário saiu da aba enquanto iniciava
+    jobIdRef.current = jobId
 
     if (isApiConfigured) {
       // O processamento acontece na API, em background. Aqui só acompanhamos.
       pollTimer.current = window.setInterval(async () => {
+        if (pollingRef.current || runId !== runIdRef.current) return
+        pollingRef.current = true
         try {
-          const status = await cadastrosService.getDownloadJob(job.jobId)
+          const status = await cadastrosService.getDownloadJob(jobId)
+          if (runId !== runIdRef.current) return
           setProgress(status.progresso ?? 0)
           if (status.log) setLog(String(status.log).split('\n').filter(Boolean))
           if (status.status !== 'executando') {
             if (pollTimer.current) window.clearInterval(pollTimer.current)
+            pollTimer.current = null
+            startRef.current = false
             setRunning(false)
+            endDownload()
+            // Uma única notificação por execução, mesmo com respostas em voo.
+            if (finishedRef.current) return
+            finishedRef.current = true
             if (status.status === 'concluido') {
               success('Download concluído!', `${status.baixadas} notas baixadas.`)
             } else {
@@ -127,27 +191,43 @@ export function DownloadPage() {
           }
         } catch (err) {
           if (pollTimer.current) window.clearInterval(pollTimer.current)
+          pollTimer.current = null
+          startRef.current = false
           setRunning(false)
+          endDownload()
+          if (finishedRef.current) return
+          finishedRef.current = true
           showError('Falha ao acompanhar o job', err instanceof Error ? err.message : undefined)
+        } finally {
+          pollingRef.current = false
         }
       }, 1200)
       return
     }
 
     const started = Date.now()
+    const etapas = new Set<number>()
     timer.current = window.setInterval(() => {
+      if (runId !== runIdRef.current) return
       const elapsed = Date.now() - started
       const next = Math.min(100, Math.round((elapsed / 2200) * 100))
       setProgress(next)
-      if (next >= 35 && log.length < 3) {
+      if (next >= 35 && !etapas.has(35)) {
+        etapas.add(35)
         setLog((current) => [...current, `[${new Date().toLocaleTimeString('pt-BR')}] Baixando XMLs...`])
       }
-      if (next >= 75 && log.length < 4) {
+      if (next >= 75 && !etapas.has(75)) {
+        etapas.add(75)
         setLog((current) => [...current, `[${new Date().toLocaleTimeString('pt-BR')}] Gerando arquivos...`])
       }
       if (next >= 100) {
         if (timer.current) window.clearInterval(timer.current)
+        timer.current = null
+        startRef.current = false
         setRunning(false)
+        endDownload()
+        if (finishedRef.current) return
+        finishedRef.current = true
         setLog((current) => [...current, `[${new Date().toLocaleTimeString('pt-BR')}] Concluído.`])
         success('Download concluído!', '12 notas baixadas nesta simulação.')
       }

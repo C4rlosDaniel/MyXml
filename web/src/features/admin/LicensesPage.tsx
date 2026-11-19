@@ -1,4 +1,4 @@
-import { CheckCircle2, KeyRound, Plus, ShieldOff, Users } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, KeyRound, Plus, ShieldOff, Trash2, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,
@@ -18,6 +18,7 @@ import type { License, LicenseStatus } from '@/types'
 import { useAuth } from '@/features/auth/AuthProvider'
 
 type Action = 'approve' | 'block'
+type SensitiveAction = 'password' | 'delete'
 
 const DURATIONS = [
   { value: '30', label: '30 dias' },
@@ -38,6 +39,12 @@ export function LicensesPage() {
   const [saving, setSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [sensitive, setSensitive] = useState<SensitiveAction | null>(null)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [showAdminPassword, setShowAdminPassword] = useState(false)
+  const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
+  const [showRevealed, setShowRevealed] = useState(false)
+  const [sensitiveBusy, setSensitiveBusy] = useState(false)
   const [newUser, setNewUser] = useState({
     fullName: '',
     email: '',
@@ -129,6 +136,52 @@ export function LicensesPage() {
     }
   }
 
+  const closeSensitive = () => {
+    setSensitive(null)
+    setAdminPassword('')
+    setShowAdminPassword(false)
+    setRevealedPassword(null)
+    setShowRevealed(false)
+  }
+
+  const openSensitive = (row: License, kind: SensitiveAction) => {
+    setSelected(row)
+    setSensitive(kind)
+    setAdminPassword('')
+    setShowAdminPassword(false)
+    setRevealedPassword(null)
+    setShowRevealed(false)
+  }
+
+  const handleSensitive = async () => {
+    if (!selected || !sensitive) return
+    if (!adminPassword) {
+      showError('Informe a senha do administrador.')
+      return
+    }
+    setSensitiveBusy(true)
+    try {
+      if (sensitive === 'password') {
+        const senha = await licenseService.getUserPassword(
+          selected.id,
+          adminPassword,
+          profile?.id,
+        )
+        setRevealedPassword(senha)
+        setShowRevealed(true)
+      } else {
+        await licenseService.deleteUser(selected.id, adminPassword, profile?.id)
+        success('Usuário removido!', `${selected.userName} foi apagado do sistema.`)
+        closeSensitive()
+        await load()
+      }
+    } catch (err) {
+      showError('Não foi possível concluir.', err instanceof Error ? err.message : undefined)
+    } finally {
+      setSensitiveBusy(false)
+    }
+  }
+
   const columns = useMemo<Column<License>[]>(
     () => [
       {
@@ -182,6 +235,24 @@ export function LicensesPage() {
                 }}
               >
                 <ShieldOff className="h-3.5 w-3.5" />Bloquear
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={isSelf}
+                title={isSelf ? 'Você não pode visualizar sua própria senha por aqui' : 'Visualizar senha do usuário'}
+                onClick={() => openSensitive(row, 'password')}
+              >
+                <Eye className="h-3.5 w-3.5" />Ver senha
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={isSelf}
+                title={isSelf ? 'Você não pode apagar o próprio usuário' : 'Apagar usuário do sistema'}
+                onClick={() => openSensitive(row, 'delete')}
+              >
+                <Trash2 className="h-3.5 w-3.5" />Apagar
               </Button>
             </div>
           )
@@ -367,6 +438,79 @@ export function LicensesPage() {
             </select>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={sensitive !== null}
+        onOpenChange={(open) => !open && closeSensitive()}
+        title={sensitive === 'password' ? 'Visualizar senha do usuário' : 'Apagar usuário do sistema'}
+        description={
+          sensitive === 'password'
+            ? `Confirme sua senha de administrador para ver a senha de ${selected?.userName ?? 'o usuário'}.`
+            : `Confirme sua senha de administrador para apagar ${selected?.userName ?? 'o usuário'} do sistema.`
+        }
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeSensitive}>
+              {revealedPassword !== null ? 'Fechar' : 'Cancelar'}
+            </Button>
+            {revealedPassword === null && (
+              <Button
+                variant={sensitive === 'delete' ? 'danger' : 'primary'}
+                loading={sensitiveBusy}
+                loadingText="Confirmando..."
+                onClick={handleSensitive}
+              >
+                {sensitive === 'delete' ? 'Apagar usuário' : 'Mostrar senha'}
+              </Button>
+            )}
+          </>
+        }
+      >
+        {revealedPassword === null ? (
+          <div className="space-y-4">
+            <Input
+              label="Senha do administrador"
+              type={showAdminPassword ? 'text' : 'password'}
+              value={adminPassword}
+              onChange={(event) => setAdminPassword(event.target.value)}
+            />
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-fg hover:underline"
+              onClick={() => setShowAdminPassword((current) => !current)}
+            >
+              {showAdminPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {showAdminPassword ? 'Ocultar senha do administrador' : 'Mostrar senha do administrador'}
+            </button>
+            {sensitive === 'delete' && (
+              <div className="rounded-sm border border-danger-border bg-danger-soft p-3 text-sm text-danger-fg">
+                Esta ação remove o usuário, a licença e o acesso ao sistema. Não pode ser desfeita.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-sm border border-line bg-subtle p-4">
+            <p className="text-xs font-medium text-txt-secondary">Senha de {selected?.userName}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-sm border border-line bg-surface px-3 py-2 text-sm text-txt-primary">
+                {showRevealed ? revealedPassword : '••••••••••'}
+              </code>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={showRevealed ? 'Ocultar senha' : 'Mostrar senha'}
+                onClick={() => setShowRevealed((current) => !current)}
+              >
+                {showRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="mt-3 text-[11px] text-txt-muted">
+              A senha fica registrada de forma criptografada no servidor e só é exibida a administradores.
+            </p>
+          </div>
+        )}
       </Modal>
     </div>
   )

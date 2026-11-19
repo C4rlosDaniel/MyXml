@@ -24,6 +24,12 @@ function mapRow(row: Record<string, unknown>): License {
   }
 }
 
+/** No modo demo não há Auth; conferimos a senha contra o admin do localStorage. */
+function verificarAdminDemo(db: ReturnType<typeof readDb>, password: string): void {
+  const ok = db.users.some((user) => user.role === 'admin' && user.password === password)
+  if (!ok) throw new Error('Senha do administrador incorreta.')
+}
+
 export const licenseService = {
   async getMyLicense(userId: string): Promise<License | null> {
     if (isMockMode) {
@@ -82,6 +88,55 @@ export const licenseService = {
       .order('created_at', { ascending: false })
     if (error) throw new Error('Não foi possível carregar as licenças.')
     return (data ?? []).map((row) => mapRow(row as Record<string, unknown>))
+  },
+
+  /** Apaga o usuário do sistema. Exige a senha do administrador. */
+  async deleteUser(
+    licenseId: string,
+    adminPassword: string,
+    selfUserId?: string,
+  ): Promise<void> {
+    if (isMockMode) {
+      const db = readDb()
+      verificarAdminDemo(db, adminPassword)
+      const license = db.licenses.find((item) => item.id === licenseId)
+      if (!license) throw new Error('Licença não encontrada.')
+      if (license.userId === selfUserId) throw new Error('Você não pode apagar o próprio usuário.')
+      db.users = db.users.filter((user) => user.id !== license.userId)
+      db.licenses = db.licenses.filter((item) => item.id !== licenseId)
+      if (db.sessionUserId === license.userId) db.sessionUserId = null
+      writeDb(db)
+      return
+    }
+    if (!isApiConfigured) throw new Error('Configure a API para apagar usuários.')
+    await apiRequest(`/licenses/${licenseId}/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ admin_password: adminPassword }),
+    })
+  },
+
+  /** Devolve a senha do usuário. Exige a senha do administrador. */
+  async getUserPassword(
+    licenseId: string,
+    adminPassword: string,
+    selfUserId?: string,
+  ): Promise<string> {
+    if (isMockMode) {
+      const db = readDb()
+      verificarAdminDemo(db, adminPassword)
+      const license = db.licenses.find((item) => item.id === licenseId)
+      if (!license) throw new Error('Licença não encontrada.')
+      if (license.userId === selfUserId) throw new Error('Use o seu próprio login para ver sua senha.')
+      const user = findUserById(license.userId)
+      if (!user) throw new Error('Usuário não encontrado.')
+      return user.password
+    }
+    if (!isApiConfigured) throw new Error('Configure a API para consultar senhas.')
+    const result = await apiRequest<{ password: string }>(`/licenses/${licenseId}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ admin_password: adminPassword }),
+    })
+    return result.password
   },
 
   async update(

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from app.config import settings
+from app.schemas.license import MessageOut
 from app.security import get_current_user
 from app.services import download_runner
 from app.services.access import allowed_company_ids
@@ -123,6 +124,31 @@ def repetir_download(
     status_download(job_id, user)
     background_tasks.add_task(download_runner.executar, job_id)
     return {"message": "Download reagendado."}
+
+
+@router.post("/{job_id}/cancel", response_model=MessageOut)
+def cancelar_download(job_id: str, user: dict = Depends(get_current_user)) -> dict:
+    """Encerra a execução quando o usuário confirma a saída da aba."""
+    _guard()
+    status_download(job_id, user)  # valida existência e permissão
+    client = get_supabase_admin()
+    atual = (
+        client.from_("download_runs")
+        .select("status")
+        .eq("id", job_id)
+        .maybe_single()
+        .execute()
+        .data
+    )
+    if not atual or atual.get("status") != "executando":
+        return {"message": "Esta execução já havia terminado."}
+
+    client.from_("download_runs").update({
+        "status": "falhou",
+        "mensagem": "Download encerrado: o usuário saiu da aba de baixar notas.",
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", job_id).execute()
+    return {"message": "Download encerrado."}
 
 
 @router.get("/{job_id}/excel")

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -67,8 +68,13 @@ const barColor: Record<ToastKind, string> = {
 
 let nextId = 0
 
+const COOLDOWN_MS = 7000
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
+  // Impede que o mesmo aviso reapareça sozinho depois que some da tela
+  // (ex.: polling que insiste em um job já encerrado com erro).
+  const recent = useRef<Map<string, number>>(new Map())
 
   const remove = useCallback((id: number) => {
     setToasts((current) => current.filter((item) => item.id !== id))
@@ -76,6 +82,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback<ToastContextValue['toast']>(
     ({ kind = 'info', title, description, duration = 5000 }) => {
+      const key = `${kind}|${title}|${description ?? ''}`
+      const now = Date.now()
+      if (now - (recent.current.get(key) ?? 0) < COOLDOWN_MS) return
+      recent.current.set(key, now)
       setToasts((current) => {
         // Evita avisos idênticos repetidos (ex.: StrictMode ou duplo clique).
         if (current.some((item) => item.title === title && item.description === description)) {

@@ -9,6 +9,7 @@ import { LicensePendingPage } from '@/features/auth/LicensePendingPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { CompaniesPage } from '@/features/cadastros/CompaniesPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { DownloadGuardProvider } from '@/features/download/DownloadGuard'
 import { DownloadPage } from '@/features/download/DownloadPage'
 import { CompanyProvider } from '@/features/empresas/CompanyProvider'
 import { HistoryPage } from '@/features/historico/HistoryPage'
@@ -45,23 +46,25 @@ export default function App() {
   if (!isAuthorized) return <LicensePendingPage />
 
   return (
-    <CompanyProvider>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="notas" element={<NotesPage />} />
-          <Route path="notas/:id" element={<NoteDetailPage />} />
-          <Route path="baixar" element={<DownloadPage />} />
-          <Route path="empresas" element={<CompaniesPage />} />
-          <Route path="historico" element={<HistoryPage />} />
-          <Route path="configuracoes" element={<SettingsPage />} />
-          <Route
-            path="admin/licencas"
-            element={profile.role === 'admin' ? <LicensesPage /> : <Navigate to="/" replace />}
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </CompanyProvider>
+    <DownloadGuardProvider>
+      <CompanyProvider>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="notas" element={<NotesPage />} />
+            <Route path="notas/:id" element={<NoteDetailPage />} />
+            <Route path="baixar" element={<DownloadPage />} />
+            <Route path="empresas" element={<CompaniesPage />} />
+            <Route path="historico" element={<HistoryPage />} />
+            <Route path="configuracoes" element={<SettingsPage />} />
+            <Route
+              path="admin/licencas"
+              element={profile.role === 'admin' ? <LicensesPage /> : <Navigate to="/" replace />}
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </CompanyProvider>
+    </DownloadGuardProvider>
   )
 }

@@ -134,6 +134,12 @@ export const cadastrosService = {
     return apiRequest<DownloadJob>(`/downloads/${jobId}`)
   },
 
+  /** Encerra a execução no servidor quando o usuário troca de aba. */
+  async cancelDownload(jobId: string): Promise<void> {
+    if (!isApiConfigured) return
+    await apiRequest(`/downloads/${jobId}/cancel`, { method: 'POST' })
+  },
+
   async exportExcel(jobId: string): Promise<void> {
     await apiDownload(`/downloads/${jobId}/excel`, `NFCe-${jobId}.xlsx`)
   },
@@ -157,5 +163,16 @@ export const cadastrosService = {
     form.append('arquivo', file)
     form.append('senha', password)
     return apiUpload(`/companies/${companyId}/certificate`, form)
+  },
+
+  async getCertificateStatus(companyId: string): Promise<{
+    cadastrado: boolean
+    cnpj?: string
+    razaoSocial?: string
+    validade?: string
+    titular?: string
+  }> {
+    if (!isApiConfigured) return { cadastrado: false }
+    return apiRequest(`/companies/${companyId}/certificate`)
   },
 }

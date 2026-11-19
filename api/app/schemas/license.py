@@ -40,3 +40,13 @@ class LicenseCreateIn(BaseModel):
 
 class MessageOut(BaseModel):
     message: str
+
+
+class AdminConfirmIn(BaseModel):
+    """Confirmação de senha exigida para apagar usuário / ver senha."""
+
+    admin_password: str = Field(min_length=1, max_length=128)
+
+
+class PasswordOut(BaseModel):
+    password: str

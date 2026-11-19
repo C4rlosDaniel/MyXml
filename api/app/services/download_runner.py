@@ -17,6 +17,12 @@ import requests
 from app.config import settings
 
 logger = logging.getLogger("myxml.download")
+
+
+class DownloadCancelado(Exception):
+    """Sinal interno: o usuário encerrou a execução ao sair da aba."""
+
+
 from app.services import certificate_vault
 from app.services.supabase_client import get_supabase_admin
 from core import downloader, excel, notas, sefaz_nfce
@@ -110,12 +116,28 @@ def executar(job_id: str) -> None:
         linhas: list[str] = []
         ultimo_progresso = -1
 
+        def _cancelado() -> bool:
+            """O endpoint /cancel troca o status para 'falhou'; para na próxima linha."""
+            atual = (
+                client.from_("download_runs")
+                .select("status")
+                .eq("id", job_id)
+                .maybe_single()
+                .execute()
+                .data
+            )
+            return not atual or atual.get("status") != "executando"
+
         def log(mensagem: str) -> None:
+            if _cancelado():
+                raise DownloadCancelado()
             linhas.append(mensagem)
             if len(linhas) % 5 == 0:
                 _atualizar_job(job_id, log="\n".join(linhas[-100:]))
 
         def progresso(atual: int, total: int, _chave: str) -> None:
+            if _cancelado():
+                raise DownloadCancelado()
             nonlocal ultimo_progresso
             percentual = 10 + int((atual / max(total, 1)) * 70)
             if percentual // 10 != ultimo_progresso // 10:
@@ -193,6 +215,10 @@ def executar(job_id: str) -> None:
             log="\n".join(linhas[-100:]),
             finished_at=datetime.now(timezone.utc).isoformat(),
         )
+    except DownloadCancelado:
+        # O job já foi marcado como falhou pelo endpoint /cancel.
+        logger.info("job %s encerrado pelo usuário", job_id)
+        return
     except Exception as exc:  # noqa: BLE001 - traduz falha para o usuário
         mensagem = f"Falha no download: {type(exc).__name__}: {exc}"
         _atualizar_job(
