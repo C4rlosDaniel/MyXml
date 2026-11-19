@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -239,19 +240,27 @@ def baixar_xmls(job_id: str, user: dict = Depends(get_current_user)) -> Response
             detail="Nenhum XML salvo para este período. Baixe as notas primeiro.",
         )
 
+    storage = client.storage.from_(settings.storage_bucket)
+
+    def _baixar(linha: dict) -> tuple[str, bytes] | None:
+        caminho = str(linha.get("storage_path") or "")
+        if not caminho:
+            return None
+        try:
+            return caminho.rsplit("/", 1)[-1], storage.download(caminho)
+        except Exception:  # noqa: BLE001 - objeto ausente não impede o restante
+            return None
+
+    # Baixa os XMLs em paralelo: um mês inteiro (centenas de notas) sai em
+    # segundos em vez de vários minutos.
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        baixados = [item for item in pool.map(_baixar, linhas) if item]
+
     conteudo = io.BytesIO()
-    enviados = 0
     with zipfile.ZipFile(conteudo, "w", zipfile.ZIP_DEFLATED) as arquivo:
-        for linha in linhas:
-            caminho = str(linha.get("storage_path") or "")
-            if not caminho:
-                continue
-            try:
-                dados = client.storage.from_(settings.storage_bucket).download(caminho)
-            except Exception:  # noqa: BLE001 - objeto ausente não impede o restante
-                continue
-            arquivo.writestr(caminho.rsplit("/", 1)[-1], dados)
-            enviados += 1
+        for nome_arquivo, dados in baixados:
+            arquivo.writestr(nome_arquivo, dados)
+    enviados = len(baixados)
 
     if not enviados:
         raise HTTPException(
