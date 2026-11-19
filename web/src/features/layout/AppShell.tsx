@@ -51,6 +51,7 @@ const routeLabels: Record<string, string> = {
   '/baixar': 'Baixar notas',
   '/empresas': 'Empresas',
   '/historico': 'Histórico',
+  '/nfse': 'NFS-e',
   '/configuracoes': 'Configurações',
   '/admin/licencas': 'Licenças',
 }
@@ -108,6 +109,7 @@ export function AppShell() {
           { to: '/baixar', label: 'Baixar notas', icon: Download },
           { to: '/notas', label: 'Notas fiscais', icon: FileText },
           { to: '/historico', label: 'Histórico', icon: History },
+          { to: '/nfse', label: 'NFS-e', icon: FileText },
         ],
       },
       {

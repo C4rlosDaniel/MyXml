@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     cert_encryption_key_file: str = ""
     mock_mode: bool = True
     alert_webhook_url: str = ""
+    # Módulo NFS-e (ADN) — desligado até existir certificado credenciado.
+    nfse_enabled: bool = False
+    nfse_adn_env: str = "homologacao"  # homologacao | producao
 
     model_config = SettingsConfigDict(
         env_file=".env",

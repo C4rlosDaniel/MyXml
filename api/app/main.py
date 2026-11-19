@@ -17,7 +17,7 @@ from app.services.sefaz_ssl import configure as configurar_ssl_sefaz
 
 configurar_ssl_sefaz()
 
-from app.routers import auth, download, empresas, health, licenses, notes
+from app.routers import auth, download, empresas, health, licenses, notes, nfse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +68,7 @@ app.include_router(licenses.router)
 app.include_router(notes.router)
 app.include_router(download.router)
 app.include_router(empresas.router)
+app.include_router(nfse.router)
 
 
 @app.exception_handler(RequestValidationError)

@@ -14,6 +14,7 @@ import { DownloadPage } from '@/features/download/DownloadPage'
 import { CompanyProvider } from '@/features/empresas/CompanyProvider'
 import { HistoryPage } from '@/features/historico/HistoryPage'
 import { AppShell } from '@/features/layout/AppShell'
+import { NfsePage } from '@/features/nfse/NfsePage'
 import { NoteDetailPage } from '@/features/notas/NoteDetailPage'
 import { NotesPage } from '@/features/notas/NotesPage'
 import { SettingsPage } from '@/features/configuracoes/SettingsPage'
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="baixar" element={<DownloadPage />} />
             <Route path="empresas" element={<CompaniesPage />} />
             <Route path="historico" element={<HistoryPage />} />
+            <Route path="nfse" element={<NfsePage />} />
             <Route path="configuracoes" element={<SettingsPage />} />
             <Route
               path="admin/licencas"
