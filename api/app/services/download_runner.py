@@ -119,20 +119,51 @@ def meses_do_periodo(inicio: date, fim: date) -> list[str]:
     return meses
 
 
+def _objetos_da_pasta(client, pasta: str) -> set[str] | None:
+    """Nomes de arquivos realmente guardados numa pasta do Storage.
+
+    ``None`` quando não foi possível listar (aí confiamos no banco para não
+    rebaixar tudo à toa).
+    """
+    try:
+        objetos = client.storage.from_(settings.storage_bucket).list(
+            pasta, {"limit": 1000}
+        )
+    except Exception as exc:  # noqa: BLE001 - Storage é infraestrutura
+        logger.warning("não consegui listar a pasta %s: %s", pasta, exc)
+        return None
+    return {str(objeto.get("name")) for objeto in (objetos or [])}
+
+
 def _chaves_salvas(client, company_id: str, chaves: list[str]) -> set[str]:
-    """Chaves que já têm XML guardado no Storage para esta empresa."""
+    """Chaves cujo XML existe de fato no Storage para esta empresa.
+
+    Não basta o ``storage_path`` estar preenchido: execuções antigas podiam
+    gravar o registro antes de enviar o arquivo. Conferimos a pasta para que
+    essas notas sejam baixadas de novo.
+    """
     salvas: set[str] = set()
+    pastas: dict[str, set[str] | None] = {}
     for indice in range(0, len(chaves), 100):
         lote = chaves[indice:indice + 100]
         resposta = (
             client.from_("notes")
-            .select("chave")
+            .select("chave, storage_path")
             .eq("company_id", company_id)
             .in_("chave", lote)
             .not_.is_("storage_path", "null")
             .execute()
         )
-        salvas.update(str(linha["chave"]) for linha in (resposta.data or []))
+        for linha in resposta.data or []:
+            caminho = str(linha.get("storage_path") or "")
+            if "/" not in caminho:
+                continue
+            pasta, _, nome = caminho.rpartition("/")
+            if pasta not in pastas:
+                pastas[pasta] = _objetos_da_pasta(client, pasta)
+            existentes = pastas[pasta]
+            if existentes is None or nome in existentes:
+                salvas.add(str(linha["chave"]))
     return salvas
 
 

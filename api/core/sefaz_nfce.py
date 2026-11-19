@@ -343,6 +343,7 @@ def baixar_chaves(
         _checar_cancelamento(cancelado)
         prefixo = f"[{i:>3}/{len(chaves)}]"
         destino = saida / f"{chave}-procNFCe.xml"
+        chamou_sefaz = False
 
         if chave in puladas:
             total["ja_tinha"] += 1
@@ -351,6 +352,7 @@ def baixar_chaves(
             total["ja_tinha"] += 1
             log(f"{prefixo} ja tinha")
         else:
+            chamou_sefaz = True
             corpo = (
                 f'<nfceDownloadXML xmlns="{NS_NFE}" versao="{VERSAO}">'
                 f"<tpAmb>{AMBIENTE}</tpAmb>"
@@ -441,7 +443,7 @@ def baixar_chaves(
 
         if progresso is not None:
             progresso(i, len(chaves), chave)
-        if pausa:
+        if pausa and chamou_sefaz:
             _dormir(pausa, cancelado)
 
     return total, baixadas

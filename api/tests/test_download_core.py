@@ -105,12 +105,18 @@ def test_baixar_chaves_continua_apos_erro_e_loga_a_data(monkeypatch, tmp_path: P
 def test_baixar_chaves_pula_o_que_ja_esta_salvo(monkeypatch, tmp_path: Path):
     chamadas: list[str] = []
     salvas: list[str] = []
+    pausas: list[float] = []
 
     def fake_chamar(pfx, senha, servico, corpo, log=print, tentativas=3, cancelado=None):
         chamadas.append(corpo)
         return etree.fromstring(XML_OK.format(chave=CHAVE_OK).encode("utf-8"))
 
     monkeypatch.setattr(sefaz_nfce, "chamar", fake_chamar)
+    monkeypatch.setattr(
+        sefaz_nfce,
+        "_dormir",
+        lambda segundos, cancelado=None: pausas.append(segundos),
+    )
 
     total, baixadas = sefaz_nfce.baixar_chaves(
         b"pfx",
@@ -126,6 +132,7 @@ def test_baixar_chaves_pula_o_que_ja_esta_salvo(monkeypatch, tmp_path: Path):
     assert chamadas == []
     assert salvas == []
     assert baixadas == []
+    assert pausas == []
     assert total == {"ok": 0, "ja_tinha": 1, "erro": 0}
 
 
