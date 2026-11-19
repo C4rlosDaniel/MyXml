@@ -284,8 +284,7 @@ export function DownloadPage() {
             </fieldset>
 
             <p className="text-xs text-txt-muted">
-              Excel e XML são baixados automaticamente para a pasta padrão de Downloads do
-              navegador, sem opção de destino. A SEFAZ disponibiliza apenas os últimos 100 dias.
+              A SEFAZ disponibiliza apenas os últimos 100 dias.
             </p>
 
             <Button fullWidth loading={running} loadingText="Baixando..." onClick={start}>

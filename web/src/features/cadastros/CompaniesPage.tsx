@@ -190,7 +190,6 @@ export function CompaniesPage() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         title={editingId ? 'Editar empresa' : 'Nova empresa com certificado'}
-        description="Envie o certificado A1 e a senha. A API lê CNPJ, razão social e validade automaticamente."
         size="lg"
         footer={
           <>
@@ -221,9 +220,6 @@ export function CompaniesPage() {
                 <CheckCircle2 className="h-3.5 w-3.5" /> Dados extraídos do certificado e preenchidos abaixo.
               </p>
             )}
-            <p className="mt-2 text-[11px] text-txt-muted">
-              A senha é usada apenas na validação e nunca fica no navegador. TODO: enviar à API para leitura real do certificado.
-            </p>
           </div>
 
           <Input label="CNPJ" value={maskCnpj(form.cnpj)} onChange={(event) => setForm({ ...form, cnpj: onlyDigits(event.target.value) })} />

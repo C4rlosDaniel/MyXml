@@ -373,7 +373,6 @@ export function LicensesPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         title="Gerar licença de acesso"
-        description="O usuário será criado no Supabase Auth e liberado imediatamente pelo prazo escolhido."
         footer={
           <>
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>

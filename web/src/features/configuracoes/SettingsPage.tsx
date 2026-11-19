@@ -1,4 +1,4 @@
-import { BadgeCheck, CheckCircle2, Save, Settings2, ShieldCheck, Upload } from 'lucide-react'
+import { CheckCircle2, Save, Settings2, ShieldCheck, Upload } from 'lucide-react'
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { Button, Card, Input, useToast } from '@/design-system'
 import { useCompany } from '@/features/empresas/CompanyProvider'
@@ -19,7 +19,6 @@ export function SettingsPage() {
   const { selectedCompany, selectedCompanyId } = useCompany()
   const [serie, setSerie] = useState(localStorage.getItem('myxml-serie') ?? '1')
   const [proximoNumero, setProximoNumero] = useState(localStorage.getItem('myxml-numero') ?? '100')
-  const [ambiente, setAmbiente] = useState<'homologacao' | 'producao'>('homologacao')
   const [certFile, setCertFile] = useState<File | null>(null)
   const [certPassword, setCertPassword] = useState('')
   const [certStatus, setCertStatus] = useState<CertificateStatus | null>(null)
@@ -86,27 +85,11 @@ export function SettingsPage() {
         </span>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-txt-primary">Configurações</h1>
-          <p className="mt-1 text-sm text-txt-secondary">Ambiente, numeração, certificado e preferências.</p>
+          <p className="mt-1 text-sm text-txt-secondary">Numeração, certificado e preferências.</p>
         </div>
       </header>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card className="p-5">
-          <h2 className="text-sm font-semibold text-txt-primary">Ambiente</h2>
-          <p className="mt-0.5 text-xs text-txt-secondary">O ambiente define se as notas são reais ou de teste.</p>
-          <div className={`mt-4 flex items-center gap-2 rounded-sm border p-3 ${ambiente === 'producao' ? 'border-success-border bg-success-soft text-success-fg' : 'border-warning-border bg-warning-soft text-warning-fg'}`}>
-            <BadgeCheck className="h-5 w-5" />
-            <div>
-              <p className="text-sm font-semibold">{ambiente === 'producao' ? 'Produção' : 'Homologação'}</p>
-              <p className="text-xs">{ambiente === 'producao' ? 'Notas com validade fiscal real.' : 'Ambiente de testes — sem validade fiscal.'}</p>
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <Button variant={ambiente === 'homologacao' ? 'primary' : 'secondary'} size="sm" onClick={() => setAmbiente('homologacao')}>Homologação</Button>
-            <Button variant={ambiente === 'producao' ? 'primary' : 'secondary'} size="sm" onClick={() => setAmbiente('producao')}>Produção</Button>
-          </div>
-        </Card>
-
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-txt-primary">Série e numeração</h2>
           <p className="mt-0.5 text-xs text-txt-secondary">Controle dos números usados na emissão.</p>
