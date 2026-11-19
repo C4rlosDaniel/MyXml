@@ -11,6 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+
+# Carrega a raiz ICP-Brasil v10 antes de qualquer chamada à SEFAZ.
+from app.services.sefaz_ssl import configure as configurar_ssl_sefaz
+
+configurar_ssl_sefaz()
+
 from app.routers import auth, download, empresas, health, licenses, notes
 
 logging.basicConfig(
