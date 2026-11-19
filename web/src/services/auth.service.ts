@@ -46,7 +46,7 @@ export const authService = {
       return toProfile(user)
     }
 
-    if (!supabase) throw new Error('Supabase não configurado.')
+    if (!supabase) throw new Error('Não foi possível conectar. Tente novamente em instantes.')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error(translateAuthError(error.message))
 

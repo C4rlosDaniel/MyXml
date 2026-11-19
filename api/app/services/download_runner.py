@@ -175,8 +175,18 @@ def executar(job_id: str) -> None:
                     "storage_path": f"{job['company_id']}/{start:%Y-%m}/{caminho.name}",
                 })
 
-            if registros:
-                client.from_("notes").upsert(registros, on_conflict="company_id,chave").execute()
+            # A SEFAZ pode devolver o mesmo XML em mais de um arquivo. Um lote com
+            # chaves repetidas quebra o UPSERT (Postgres 21000). Remove duplicatas
+            # e envia em partes pequenas para não estourar o payload.
+            unicos: dict[tuple[str, str], dict] = {}
+            for registro in registros:
+                chave = (str(registro["company_id"]), str(registro["chave"]))
+                unicos[chave] = registro
+            registros = list(unicos.values())
+            for indice in range(0, len(registros), 100):
+                client.from_("notes").upsert(
+                    registros[indice:indice + 100], on_conflict="company_id,chave"
+                ).execute()
 
             bucket = settings.storage_bucket
             prefixo = f"{job['company_id']}/{start:%Y-%m}"

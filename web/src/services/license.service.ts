@@ -56,7 +56,7 @@ export const licenseService = {
     role: 'admin' | 'contador'
   }): Promise<License> {
     if (isMockMode || !isApiConfigured) {
-      throw new Error('Configure a API FastAPI para gerar licenças.')
+      throw new Error('Não foi possível gerar a licença no momento.')
     }
     return apiRequest<License>('/licenses', {
       method: 'POST',
@@ -108,7 +108,7 @@ export const licenseService = {
       writeDb(db)
       return
     }
-    if (!isApiConfigured) throw new Error('Configure a API para apagar usuários.')
+    if (!isApiConfigured) throw new Error('Não foi possível apagar o usuário.')
     await apiRequest(`/licenses/${licenseId}/delete`, {
       method: 'POST',
       body: JSON.stringify({ admin_password: adminPassword }),
@@ -131,7 +131,7 @@ export const licenseService = {
       if (!user) throw new Error('Usuário não encontrado.')
       return user.password
     }
-    if (!isApiConfigured) throw new Error('Configure a API para consultar senhas.')
+    if (!isApiConfigured) throw new Error('Não foi possível consultar a senha.')
     const result = await apiRequest<{ password: string }>(`/licenses/${licenseId}/password`, {
       method: 'POST',
       body: JSON.stringify({ admin_password: adminPassword }),
@@ -161,7 +161,7 @@ export const licenseService = {
       return toLicense(updated, user)
     }
 
-    if (!supabase) throw new Error('Supabase não configurado.')
+    if (!supabase) throw new Error('Não foi possível carregar os dados.')
     // TODO: validar prazo mínimo/máximo no backend antes de autorizar
     const { data, error } = await supabase
       .from('licenses')

@@ -116,7 +116,7 @@ export const notesService = {
 
   /** Baixa o XML original da nota, lido do Storage pela API. */
   async downloadXml(noteId: string): Promise<void> {
-    if (!isApiConfigured) throw new Error('Configure a API para baixar o XML da nota.')
+    if (!isApiConfigured) throw new Error('O download do XML estará disponível em instantes.')
     await apiDownload(`/notes/${noteId}/xml`, `NFCe-${noteId}.xml`)
   },
 }

@@ -4,7 +4,7 @@ import { Button, Card, Input, useToast } from '@/design-system'
 import { useCompany } from '@/features/empresas/CompanyProvider'
 import { formatDate } from '@/lib/masks'
 import { cadastrosService } from '@/services/cadastros.service'
-import { isApiConfigured, isMockMode } from '@/services/config'
+import { isApiConfigured } from '@/services/config'
 
 interface CertificateStatus {
   cadastrado: boolean
@@ -27,7 +27,7 @@ export function SettingsPage() {
   const save = () => {
     localStorage.setItem('myxml-serie', serie)
     localStorage.setItem('myxml-numero', proximoNumero)
-    success('Configurações salvas nesta demonstração.')
+    success('Configurações salvas.')
   }
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export function SettingsPage() {
       return
     }
     if (!isApiConfigured) {
-      info('Configure a API para enviar o certificado ao cofre.')
+      info('O envio de certificados estará disponível em instantes.')
       return
     }
 
@@ -160,7 +160,6 @@ export function SettingsPage() {
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between"><dt className="text-txt-muted">Sistema</dt><dd className="font-medium text-txt-primary">MyXml Web 0.1.0</dd></div>
             <div className="flex justify-between"><dt className="text-txt-muted">Modelo</dt><dd className="font-medium text-txt-primary">NFC-e (65)</dd></div>
-            <div className="flex justify-between"><dt className="text-txt-muted">Modo</dt><dd className="font-medium text-txt-primary">{isMockMode ? 'Demonstração' : 'Conectado'}</dd></div>
           </dl>
         </Card>
       </div>

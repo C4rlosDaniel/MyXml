@@ -28,7 +28,6 @@ export function NfsePage() {
   const [nsuIni, setNsuIni] = useState('')
   const [nsuFim, setNsuFim] = useState('')
   const [habilitado, setHabilitado] = useState(false)
-  const [ambiente, setAmbiente] = useState('homologacao')
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [log, setLog] = useState<string[]>([])
@@ -50,7 +49,6 @@ export function NfsePage() {
   useEffect(() => {
     nfseService.config().then((cfg) => {
       setHabilitado(cfg.habilitado)
-      setAmbiente(cfg.ambiente)
     }).catch(() => undefined)
   }, [])
 
@@ -98,7 +96,7 @@ export function NfsePage() {
       return
     }
     if (!habilitado) {
-      info('Módulo NFS-e em preparação.', 'Configure o certificado A1 e habilite o módulo na API.')
+      info('Módulo NFS-e em preparação.', 'Em breve você poderá baixar suas notas de serviço por aqui.')
       return
     }
 
@@ -243,10 +241,10 @@ export function NfsePage() {
         <div className="mb-5 flex items-start gap-3 rounded-sm border border-warning-border bg-warning-soft p-4">
           <Info className="mt-0.5 h-5 w-5 shrink-0 text-warning-fg" />
           <div className="text-sm text-txt-secondary">
-            <p className="font-semibold text-warning-fg">Módulo em preparação</p>
+            <p className="font-semibold text-warning-fg">Em breve</p>
             <p className="mt-1">
-              A estrutura de consulta está pronta. Para ativar, configure o certificado A1 da empresa
-              no cofre, o credenciamento no ADN e <code>NFSE_ENABLED=true</code> na API.
+              Estamos preparando a consulta das notas de serviço. Você poderá baixar e consultar
+              as NFS-e emitidas e recebidas diretamente por aqui.
             </p>
           </div>
         </div>
@@ -282,7 +280,7 @@ export function NfsePage() {
               <Input label="NSU final" inputMode="numeric" value={nsuFim} onChange={(event) => setNsuFim(event.target.value)} />
             </div>
             <p className="text-xs text-txt-muted">
-              Deixe em branco para continuar do último NSU baixado. Ambiente: {ambiente}.
+              Deixe em branco para continuar do último número baixado.
             </p>
             <Button fullWidth loading={running} loadingText="Buscando..." disabled={!habilitado} onClick={buscar}>
               <Play className="h-4 w-4" /> Buscar NFS-e

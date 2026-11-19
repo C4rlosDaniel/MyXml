@@ -166,6 +166,11 @@ export const cadastrosService = {
     await apiDownload(`/downloads/${jobId}/excel`, `NFCe-${jobId}.xlsx`)
   },
 
+  /** ZIP com os XMLs originais gravados pela execução. */
+  async downloadXmls(jobId: string): Promise<void> {
+    await apiDownload(`/downloads/${jobId}/xml`, `NFCe-${jobId}.zip`)
+  },
+
   async previewCertificate(
     file: File,
     password: string,

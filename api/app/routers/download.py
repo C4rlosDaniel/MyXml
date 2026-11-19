@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.config import settings
 from app.schemas.license import MessageOut
@@ -148,6 +148,30 @@ def cancelar_download(job_id: str, user: dict = Depends(get_current_user)) -> di
         "finished_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", job_id).execute()
     return {"message": "Download encerrado."}
+
+
+@router.get("/{job_id}/xml")
+def baixar_xmls(job_id: str, user: dict = Depends(get_current_user)) -> Response:
+    """Devolve o ZIP com os XMLs originais gravados no Storage pelo job."""
+    _guard()
+    job = status_download(job_id, user)
+    inicio = job.get("periodo_ini")
+    if not inicio:
+        raise HTTPException(status_code=404, detail="Período da execução não encontrado.")
+    mes = datetime.fromisoformat(str(inicio)).date()
+    nome = f"NFCe-{mes:%Y-%m}.zip"
+    caminho = f"{job['company_id']}/{mes:%Y-%m}/{nome}"
+    try:
+        conteudo = get_supabase_admin().storage.from_(settings.storage_bucket).download(caminho)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=404, detail="O arquivo XML desta execução não está mais disponível."
+        ) from exc
+    return Response(
+        content=conteudo,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+    )
 
 
 @router.get("/{job_id}/excel")

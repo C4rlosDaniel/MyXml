@@ -6,15 +6,6 @@ import { useDownloadGuard } from '@/features/download/DownloadGuard'
 import { isApiConfigured } from '@/services/config'
 import { cadastrosService, type CompanyRecord } from '@/services/cadastros.service'
 
-type OutputMode = 'excel' | 'xml' | 'both'
-
-const sampleXml = (number: string) => `<?xml version="1.0" encoding="UTF-8"?>
-<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
-  <NFe><infNFe Id="NFe3526113072042000010365001000000${number}1000000010">
-    <ide><cUF>35</cUF><nNF>${number}</nNF><serie>1</serie></ide>
-  </infNFe></NFe>
-</nfeProc>`
-
 function progressoDoLog(linhas: string[]): { atual: number; total: number } | null {
   for (let i = linhas.length - 1; i >= 0; i -= 1) {
     const encontrado = linhas[i].match(/\[(\d+)\/(\d+)\]/)
@@ -24,11 +15,12 @@ function progressoDoLog(linhas: string[]): { atual: number; total: number } | nu
 }
 
 function formatarLinhaLog(linha: string): string {
-  // O log do core traz a chave de 44 dígitos; nela os caracteres 2..8 são AAMMDD.
-  const encontrado = linha.match(/^(\[\d+\/\d+\]\s+baixada\s+)(\d{44})$/)
+  // O log traz "[ 68/192] baixada  3526...(44 dígitos)". Nas chaves, os
+  // caracteres 2..7 são AAMMDD (ano com 2 dígitos, mês e dia).
+  const encontrado = linha.match(/(\[\s*\d+\s*\/\s*\d+\s*\]\s*baixada\b[^0-9]*)(\d{44})/)
   if (!encontrado) return linha
   const chave = encontrado[2]
-  const ano = 2000 + Number(chave.slice(2, 4))
+  const ano = chave.slice(2, 4)
   const mes = chave.slice(4, 6)
   const dia = chave.slice(6, 8)
   return `${encontrado[1]}do dia ${dia}/${mes}/${ano}`
@@ -41,10 +33,11 @@ export function DownloadPage() {
   const [companies, setCompanies] = useState<CompanyRecord[]>([])
   const [companyId, setCompanyId] = useState(selectedCompanyId ?? '')
   const [period, setPeriod] = useState('')
-  const [outputMode, setOutputMode] = useState<OutputMode>('excel')
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [log, setLog] = useState<string[]>([])
+  const [jobStatus, setJobStatus] = useState<string | null>(null)
+  const [baixadas, setBaixadas] = useState(0)
   const timer = useRef<number | null>(null)
   const pollTimer = useRef<number | null>(null)
   const jobIdRef = useRef<string | null>(null)
@@ -106,23 +99,11 @@ export function DownloadPage() {
   }, [endDownload])
 
   const saveXmls = async () => {
-    // TODO: no backend, gerar os XMLs reais do Supabase Storage e devolver um .zip.
-    // Por padrão o navegador salva tudo na pasta Downloads do usuário.
-    const files = [
-      { name: `NFCe-${period}-001.xml`, content: sampleXml('001') },
-      { name: `NFCe-${period}-002.xml`, content: sampleXml('002') },
-      { name: `NFCe-${period}-003.xml`, content: sampleXml('003') },
-    ]
+    const jobId = jobIdRef.current
+    if (!jobId) return
     try {
-      files.forEach((file) => {
-        const url = URL.createObjectURL(new Blob([file.content], { type: 'application/xml' }))
-        const anchor = document.createElement('a')
-        anchor.href = url
-        anchor.download = file.name
-        anchor.click()
-        URL.revokeObjectURL(url)
-      })
-      success('XMLs baixados!', `${files.length} arquivos enviados para a pasta Downloads.`)
+      await cadastrosService.downloadXmls(jobId)
+      success('XMLs baixados!', 'O ZIP foi enviado para a pasta Downloads.')
     } catch (err) {
       showError('Não foi possível baixar os XMLs', err instanceof Error ? err.message : undefined)
     }
@@ -144,6 +125,8 @@ export function DownloadPage() {
     const runId = ++runIdRef.current
     setRunning(true)
     setProgress(0)
+    setJobStatus(null)
+    setBaixadas(0)
     setLog([
       `[${new Date().toLocaleTimeString('pt-BR')}] Consultando SEFAZ-SP...`,
       `[${new Date().toLocaleTimeString('pt-BR')}] Período: ${period}`,
@@ -165,7 +148,6 @@ export function DownloadPage() {
     jobIdRef.current = jobId
 
     if (isApiConfigured) {
-      // O processamento acontece na API, em background. Aqui só acompanhamos.
       pollTimer.current = window.setInterval(async () => {
         if (pollingRef.current || runId !== runIdRef.current) return
         pollingRef.current = true
@@ -173,6 +155,8 @@ export function DownloadPage() {
           const status = await cadastrosService.getDownloadJob(jobId)
           if (runId !== runIdRef.current) return
           setProgress(status.progresso ?? 0)
+          setJobStatus(status.status)
+          setBaixadas(status.baixadas ?? 0)
           if (status.log) setLog(String(status.log).split('\n').filter(Boolean))
           if (status.status !== 'executando') {
             if (pollTimer.current) window.clearInterval(pollTimer.current)
@@ -228,6 +212,8 @@ export function DownloadPage() {
         endDownload()
         if (finishedRef.current) return
         finishedRef.current = true
+        setJobStatus('concluido')
+        setBaixadas(12)
         setLog((current) => [...current, `[${new Date().toLocaleTimeString('pt-BR')}] Concluído.`])
         success('Download concluído!', '12 notas baixadas nesta simulação.')
       }
@@ -235,6 +221,7 @@ export function DownloadPage() {
   }
 
   const notasBaixadas = progressoDoLog(log)
+  const podeBaixar = jobStatus !== null && jobStatus !== 'executando' && baixadas > 0
 
   return (
     <div>
@@ -266,22 +253,6 @@ export function DownloadPage() {
               <label className="mb-1.5 block text-xs font-medium text-txt-secondary" htmlFor="periodo-download">Período</label>
               <input id="periodo-download" type="month" className="field h-10 w-full px-3 text-sm focus:border-accent focus:ring-2 focus:ring-accent focus:outline-none" value={period} onChange={(event) => setPeriod(event.target.value)} />
             </div>
-
-            <fieldset>
-              <legend className="mb-2 text-xs font-medium text-txt-secondary">Formato de saída</legend>
-              <div className="space-y-2">
-                {([
-                  { value: 'excel', label: 'Planilha Excel' },
-                  { value: 'xml', label: 'Somente XML' },
-                  { value: 'both', label: 'XML + Excel' },
-                ] as { value: OutputMode; label: string }[]).map((option) => (
-                  <label key={option.value} className={`flex cursor-pointer items-center gap-2 rounded-sm border px-3 py-2.5 text-sm transition-colors ${outputMode === option.value ? 'border-accent bg-accent-soft text-primary-fg' : 'border-line bg-surface text-txt-secondary hover:bg-hover'}`}>
-                    <input type="radio" name="output-mode" className="accent-[var(--primary)]" checked={outputMode === option.value} onChange={() => setOutputMode(option.value)} />
-                    {option.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
 
             <p className="text-xs text-txt-muted">
               A SEFAZ disponibiliza apenas os últimos 100 dias.
@@ -323,31 +294,30 @@ export function DownloadPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {outputMode !== 'xml' && (
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={running || progress < 100}
-                onClick={async () => {
-                  if (isApiConfigured && jobIdRef.current) {
-                    try {
-                      await cadastrosService.exportExcel(jobIdRef.current)
-                      success('Planilha baixada.')
-                    } catch (err) {
-                      showError('Não foi possível gerar a planilha', err instanceof Error ? err.message : undefined)
-                    }
-                  } else {
-                    info('Exportação disponível com a API conectada.')
-                  }
-                }}
-              >
-                <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
-              </Button>
-            )}
-            {outputMode !== 'excel' && (
-              <Button size="sm" disabled={running || progress < 100} onClick={saveXmls}>
-                <Download className="h-4 w-4" /> Salvar XMLs
-              </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={running || !podeBaixar}
+              onClick={async () => {
+                const jobId = jobIdRef.current
+                if (!jobId) return
+                try {
+                  await cadastrosService.exportExcel(jobId)
+                  success('Planilha baixada.')
+                } catch (err) {
+                  showError('Não foi possível gerar a planilha', err instanceof Error ? err.message : undefined)
+                }
+              }}
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
+            </Button>
+            <Button size="sm" disabled={running || !podeBaixar} onClick={saveXmls}>
+              <Download className="h-4 w-4" /> Salvar XMLs
+            </Button>
+            {!podeBaixar && jobStatus && baixadas === 0 && (
+              <p className="w-full text-xs text-txt-muted">
+                Nenhum arquivo disponível para esta execução.
+              </p>
             )}
           </div>
         </Card>

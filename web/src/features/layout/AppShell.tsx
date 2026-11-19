@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  Receipt,
   Search,
   Settings,
   ShieldCheck,
@@ -38,6 +39,7 @@ interface NavItem {
   label: string
   icon: LucideIcon
   end?: boolean
+  children?: NavItem[]
 }
 
 interface NavGroup {
@@ -48,7 +50,7 @@ interface NavGroup {
 const routeLabels: Record<string, string> = {
   '/': 'Visão geral',
   '/notas': 'Notas fiscais',
-  '/baixar': 'Baixar notas',
+  '/baixar': 'Baixar NFC-e',
   '/empresas': 'Empresas',
   '/historico': 'Histórico',
   '/nfse': 'NFS-e',
@@ -94,6 +96,7 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('myxml-sidebar') === 'collapsed')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [expandedNav, setExpandedNav] = useState<string | null>(null)
   const lastG = useRef(0)
 
   useEffect(() => {
@@ -106,10 +109,17 @@ export function AppShell() {
       {
         label: 'Fiscal',
         items: [
-          { to: '/baixar', label: 'Baixar notas', icon: Download },
+          {
+            to: '/baixar',
+            label: 'Baixar notas',
+            icon: Download,
+            children: [
+              { to: '/baixar', label: 'NFC-e', icon: Download, end: true },
+              { to: '/nfse', label: 'NFS-e', icon: Receipt },
+            ],
+          },
           { to: '/notas', label: 'Notas fiscais', icon: FileText },
           { to: '/historico', label: 'Histórico', icon: History },
-          { to: '/nfse', label: 'NFS-e', icon: FileText },
         ],
       },
       {
@@ -131,13 +141,22 @@ export function AppShell() {
 
   const commands = useMemo<PaletteCommand[]>(() => {
     const navCommands = navGroups.flatMap((group) =>
-      group.items.map((item) => ({
-        id: item.to,
-        label: item.label,
-        group: group.label,
-        icon: item.icon,
-        run: () => requestNavigation(() => navigate(item.to)),
-      })),
+      group.items.flatMap((item) => [
+        {
+          id: item.children ? `${item.to}-grupo` : item.to,
+          label: item.label,
+          group: group.label,
+          icon: item.icon,
+          run: () => requestNavigation(() => navigate(item.to)),
+        },
+        ...(item.children ?? []).map((filho) => ({
+          id: filho.to,
+          label: filho.label,
+          group: group.label,
+          icon: filho.icon,
+          run: () => requestNavigation(() => navigate(filho.to)),
+        })),
+      ]),
     )
     return [
       ...navCommands,
@@ -207,33 +226,83 @@ export function AppShell() {
             </p>
           )}
           <div className="space-y-0.5">
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                title={compact ? item.label : undefined}
-                onClick={(event) => {
-                  event.preventDefault()
-                  requestNavigation(() => {
-                    setDrawerOpen(false)
-                    navigate(item.to)
-                  })
-                }}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-3 rounded-sm py-2 text-sm font-medium transition-colors focus-ring',
-                    compact ? 'justify-center px-2' : 'px-3',
-                    isActive
-                      ? 'border-l-2 border-accent bg-accent-soft text-primary-fg'
-                      : 'border-l-2 border-transparent text-txt-secondary hover:bg-hover hover:text-txt-primary',
-                  )
-                }
-              >
-                <item.icon className="h-[18px] w-[18px] shrink-0" />
-                {!compact && <span className="truncate">{item.label}</span>}
-              </NavLink>
-            ))}
+            {group.items.map((item) =>
+              item.children && !compact ? (
+                <div key={`grupo-${item.to}`}>
+                  <button
+                    type="button"
+                    aria-expanded={expandedNav === item.to}
+                    onClick={() =>
+                      setExpandedNav((current) => (current === item.to ? null : item.to))
+                    }
+                    className="flex w-full items-center gap-3 rounded-sm border-l-2 border-transparent px-3 py-2 text-sm font-medium text-txt-secondary transition-colors hover:bg-hover hover:text-txt-primary focus-ring"
+                  >
+                    <item.icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className="flex-1 truncate text-left">{item.label}</span>
+                    {expandedNav === item.to ? (
+                      <ChevronDown className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 shrink-0" />
+                    )}
+                  </button>
+                  {expandedNav === item.to && (
+                    <div className="ml-6 mt-0.5 space-y-0.5 border-l border-line pl-2">
+                      {item.children.map((filho) => (
+                        <NavLink
+                          key={filho.to}
+                          to={filho.to}
+                          end={filho.end}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            requestNavigation(() => {
+                              setDrawerOpen(false)
+                              navigate(filho.to)
+                            })
+                          }}
+                          className={({ isActive }) =>
+                            cn(
+                              'flex items-center gap-2 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors focus-ring',
+                              isActive
+                                ? 'bg-accent-soft text-primary-fg'
+                                : 'text-txt-muted hover:bg-hover hover:text-txt-primary',
+                            )
+                          }
+                        >
+                          <filho.icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{filho.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  title={compact ? item.label : undefined}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    requestNavigation(() => {
+                      setDrawerOpen(false)
+                      navigate(item.to)
+                    })
+                  }}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-sm py-2 text-sm font-medium transition-colors focus-ring',
+                      compact ? 'justify-center px-2' : 'px-3',
+                      isActive
+                        ? 'border-l-2 border-accent bg-accent-soft text-primary-fg'
+                        : 'border-l-2 border-transparent text-txt-secondary hover:bg-hover hover:text-txt-primary',
+                    )
+                  }
+                >
+                  <item.icon className="h-[18px] w-[18px] shrink-0" />
+                  {!compact && <span className="truncate">{item.label}</span>}
+                </NavLink>
+              ),
+            )}
           </div>
         </div>
       ))}

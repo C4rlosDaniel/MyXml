@@ -16,7 +16,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export function LoginPage() {
-  const { signIn, mockMode } = useAuth()
+  const { signIn } = useAuth()
   const { success, error: showError } = useToast()
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
@@ -37,16 +37,6 @@ export function LoginPage() {
       navigate('/', { replace: true })
     } catch (err) {
       showError('Não foi possível entrar', err instanceof Error ? err.message : 'Tente novamente.')
-    }
-  }
-
-  const quickLogin = async (email: string, password: string) => {
-    try {
-      await signIn(email, password)
-      success('Acesso demonstrativo iniciado.')
-      navigate('/', { replace: true })
-    } catch (err) {
-      showError('Falha no acesso', err instanceof Error ? err.message : 'Tente novamente.')
     }
   }
 
@@ -105,31 +95,6 @@ export function LoginPage() {
           <span>Seu acesso é liberado pelo administrador do sistema.</span>
         </div>
 
-        {mockMode && (
-          <div className="mt-5 border-t divider pt-5">
-            <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-txt-muted">
-              Acessos de demonstração
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => quickLogin('admin@myxml.com.br', 'admin123')}
-              >
-                Entrar como admin
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => quickLogin('contador@myxml.com.br', 'contador123')}
-              >
-                Entrar como contador
-              </Button>
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   )
