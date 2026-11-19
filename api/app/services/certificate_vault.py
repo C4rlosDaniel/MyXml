@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from cryptography.fernet import Fernet
 
 from app.config import settings
-from app.services.supabase_client import get_supabase_admin
+from app.services.supabase_client import get_supabase_admin, maybe_data
 
 _DEV_KEY = "MYXML_DEV_ONLY_CHANGE_ME"
 
@@ -74,7 +74,7 @@ def save(
     response = client.from_("company_certificates").upsert(payload).execute()
     if not response.data:
         raise RuntimeError("Não foi possível salvar o certificado no cofre.")
-    return response.data[0]
+    return maybe_data(response)[0]
 
 
 def load(company_id: str) -> tuple[bytes, str]:
@@ -87,7 +87,7 @@ def load(company_id: str) -> tuple[bytes, str]:
         .maybe_single()
         .execute()
     )
-    row = response.data
+    row = maybe_data(response)
     if not row:
         raise LookupError("Nenhum certificado cadastrado para esta empresa.")
     return decrypt(row["pfx_enc"]), decrypt(row["senha_enc"]).decode("utf-8")
@@ -102,4 +102,4 @@ def info(company_id: str) -> dict | None:
         .maybe_single()
         .execute()
     )
-    return response.data
+    return maybe_data(response)

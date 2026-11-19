@@ -16,7 +16,7 @@ from app.schemas.license import (
 )
 from app.security import admin_required, get_current_user
 from app.services import admin_password, license_service, password_vault
-from app.services.supabase_client import get_supabase_admin
+from app.services.supabase_client import get_supabase_admin, maybe_data
 
 router = APIRouter(prefix="/licenses", tags=["licenses"])
 logger = logging.getLogger("myxml.licenses")
@@ -149,7 +149,9 @@ async def ver_senha_usuario(
     admin_password.verify(admin, payload.admin_password)
 
     client = get_supabase_admin()
-    row = client.from_("licenses").select("user_id").eq("id", license_id).maybe_single().execute().data
+    row = maybe_data(
+        client.from_("licenses").select("user_id").eq("id", license_id).maybe_single().execute()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Licença não encontrada.")
 
@@ -174,7 +176,9 @@ async def apagar_usuario(
     admin_password.verify(admin, payload.admin_password)
 
     client = get_supabase_admin()
-    row = client.from_("licenses").select("user_id").eq("id", license_id).maybe_single().execute().data
+    row = maybe_data(
+        client.from_("licenses").select("user_id").eq("id", license_id).maybe_single().execute()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Licença não encontrada.")
 

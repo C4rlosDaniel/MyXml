@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.config import settings
 from app.security import get_current_user
 from app.services.access import allowed_company_ids
-from app.services.supabase_client import get_supabase_admin
+from app.services.supabase_client import get_supabase_admin, maybe_data
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
@@ -50,7 +50,7 @@ def detalhar_nota(note_id: str, user: dict = Depends(get_current_user)) -> dict:
     response = (
         client.from_("notes").select(SELECT).eq("id", note_id).maybe_single().execute()
     )
-    note = response.data
+    note = maybe_data(response)
     if not note:
         raise HTTPException(status_code=404, detail="Nota não encontrada.")
 

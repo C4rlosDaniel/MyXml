@@ -24,7 +24,7 @@ class DownloadCancelado(Exception):
 
 
 from app.services import certificate_vault
-from app.services.supabase_client import get_supabase_admin
+from app.services.supabase_client import get_supabase_admin, maybe_data
 from core import downloader, excel, notas, sefaz_nfce
 
 # Tradução de códigos SEFAZ para os rótulos do front (apenas apresentação).
@@ -71,13 +71,12 @@ def _alertar_falha(job_id: str, mensagem: str) -> None:
 def executar(job_id: str) -> None:
     """Execução síncrona chamada por BackgroundTasks."""
     client = get_supabase_admin()
-    job = (
+    job = maybe_data(
         client.from_("download_runs")
         .select("id, company_id, user_id, periodo_ini, periodo_fim, progresso")
         .eq("id", job_id)
         .maybe_single()
         .execute()
-        .data
     )
     if not job:
         return
@@ -118,13 +117,12 @@ def executar(job_id: str) -> None:
 
         def _cancelado() -> bool:
             """O endpoint /cancel troca o status para 'falhou'; para na próxima linha."""
-            atual = (
+            atual = maybe_data(
                 client.from_("download_runs")
                 .select("status")
                 .eq("id", job_id)
                 .maybe_single()
                 .execute()
-                .data
             )
             return not atual or atual.get("status") != "executando"
 
@@ -233,13 +231,12 @@ def executar(job_id: str) -> None:
 def gerar_excel(job_id: str) -> tuple[str, Path]:
     """Gera o .xlsx com o core original e devolve (nome, caminho temporário)."""
     client = get_supabase_admin()
-    job = (
+    job = maybe_data(
         client.from_("download_runs")
         .select("company_id, periodo_ini, periodo_fim, user_id")
         .eq("id", job_id)
         .maybe_single()
         .execute()
-        .data
     )
     if not job:
         raise LookupError("Execução não encontrada.")
@@ -258,15 +255,13 @@ def gerar_excel(job_id: str) -> tuple[str, Path]:
         .data
         or []
     )
-    company = (
+    company = maybe_data(
         client.from_("companies")
         .select("razao_social, cnpj")
         .eq("id", job["company_id"])
         .maybe_single()
         .execute()
-        .data
-        or {}
-    )
+    ) or {}
 
     destino = Path(tempfile.gettempdir()) / f"myxml-{job_id}.xlsx"
     excel.exportar(

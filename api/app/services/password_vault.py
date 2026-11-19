@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app.services import certificate_vault
-from app.services.supabase_client import get_supabase_admin
+from app.services.supabase_client import get_supabase_admin, maybe_data
 
 _TABLE = "license_passwords"
 
@@ -24,14 +24,13 @@ def save(license_id: str, password: str) -> None:
 
 
 def get(license_id: str) -> str | None:
-    row = (
+    row = maybe_data(
         get_supabase_admin()
         .from_(_TABLE)
         .select("password_enc")
         .eq("license_id", license_id)
         .maybe_single()
         .execute()
-        .data
     )
     if not row:
         return None

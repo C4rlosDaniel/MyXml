@@ -57,6 +57,13 @@ def test_admin_password_uses_direct_http(monkeypatch):
     assert chamados[0]["json"]["password"] == "admin123"
 
 
+def test_maybe_data_none():
+    """maybe_single().execute() devolve None quando não há linha (sem .data)."""
+    from app.services.supabase_client import maybe_data
+
+    assert maybe_data(None) is None
+
+
 def test_admin_password_wrong(monkeypatch):
     monkeypatch.setattr(settings, "mock_mode", False)
     monkeypatch.setattr(

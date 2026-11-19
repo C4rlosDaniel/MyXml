@@ -8,7 +8,7 @@ from app.config import settings
 from app.security import admin_required, get_current_user
 from app.services import certificate_vault
 from app.services.access import allowed_company_ids
-from app.services.supabase_client import get_supabase_admin
+from app.services.supabase_client import get_supabase_admin, maybe_data
 from core.certificado import CertificadoInvalido, carregar
 
 router = APIRouter(prefix="/companies", tags=["companies"])
@@ -96,8 +96,10 @@ async def enviar_certificado(
     """Valida o .pfx no servidor e guarda pfx+senha criptografados no cofre."""
     _guard()
     client = get_supabase_admin()
-    exists = client.from_("companies").select("id").eq("id", company_id).maybe_single().execute()
-    if not exists.data:
+    exists = maybe_data(
+        client.from_("companies").select("id").eq("id", company_id).maybe_single().execute()
+    )
+    if not exists:
         raise HTTPException(status_code=404, detail="Empresa não encontrada.")
 
     content = await arquivo.read()

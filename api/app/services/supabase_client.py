@@ -21,3 +21,11 @@ def get_supabase_admin() -> Any:
     from supabase import create_client
 
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
+
+
+def maybe_data(response: Any) -> Any:
+    """supabase-py 2.x: maybe_single().execute() devolve None quando não há linha.
+
+    Chamar `.data` direto nesse None gera 500 em vez de um 404 amigável.
+    """
+    return response.data if response is not None else None

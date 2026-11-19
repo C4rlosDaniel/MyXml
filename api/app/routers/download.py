@@ -12,7 +12,7 @@ from app.schemas.license import MessageOut
 from app.security import get_current_user
 from app.services import download_runner
 from app.services.access import allowed_company_ids
-from app.services.supabase_client import get_supabase_admin
+from app.services.supabase_client import get_supabase_admin, maybe_data
 
 router = APIRouter(prefix="/downloads", tags=["downloads"])
 
@@ -103,7 +103,7 @@ def status_download(job_id: str, user: dict = Depends(get_current_user)) -> dict
         .maybe_single()
         .execute()
     )
-    job = response.data
+    job = maybe_data(response)
     if not job:
         raise HTTPException(status_code=404, detail="Execução não encontrada.")
 
@@ -132,13 +132,12 @@ def cancelar_download(job_id: str, user: dict = Depends(get_current_user)) -> di
     _guard()
     status_download(job_id, user)  # valida existência e permissão
     client = get_supabase_admin()
-    atual = (
+    atual = maybe_data(
         client.from_("download_runs")
         .select("status")
         .eq("id", job_id)
         .maybe_single()
         .execute()
-        .data
     )
     if not atual or atual.get("status") != "executando":
         return {"message": "Esta execução já havia terminado."}
