@@ -271,20 +271,6 @@ export function AppShell() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-5">{renderNav(collapsed)}</div>
-
-        <div className="border-t border-line p-3">
-          {collapsed ? (
-            <span className="mx-auto block h-2.5 w-2.5 rounded-full bg-warning" title="Homologação" />
-          ) : (
-            <div className="rounded-sm border border-line bg-subtle p-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-txt-secondary">
-                <span className="h-2 w-2 rounded-full bg-warning" aria-hidden="true" />
-                SEFAZ-SP
-              </div>
-              <p className="mt-1 text-xs text-txt-muted">Homologação • a verificar</p>
-            </div>
-          )}
-        </div>
       </aside>
 
       <div className={cn('transition-[padding] duration-150', sidebarWidth)}>
