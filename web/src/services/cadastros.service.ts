@@ -81,7 +81,25 @@ export const cadastrosService = {
     return [...companies]
   },
 
-  async saveCompany(company: CompanyRecord): Promise<CompanyRecord> {
+  async saveCompany(company: CompanyRecord, isNew = true): Promise<CompanyRecord> {
+    const corpo = {
+      cnpj: company.cnpj,
+      razao_social: company.razaoSocial,
+      nome_exibicao: company.nomeExibicao,
+      cert_validade: company.certValidade || null,
+    }
+    // Escrita passa pela API: a RLS do Supabase só permite admin escrever em
+    // companies, e o contador precisa cadastrar/editar a própria empresa.
+    if (isApiConfigured) {
+      const linha = isNew
+        ? await apiRequest<Record<string, unknown>>('/companies', {
+            method: 'POST', body: JSON.stringify(corpo),
+          })
+        : await apiRequest<Record<string, unknown>>(`/companies/${company.id}`, {
+            method: 'PATCH', body: JSON.stringify(corpo),
+          })
+      return { ...company, ...mapCompany(linha) }
+    }
     if (live()) {
       const { error } = await supabase!.from('companies').upsert({
         id: company.id, cnpj: company.cnpj, razao_social: company.razaoSocial,
@@ -97,6 +115,10 @@ export const cadastrosService = {
   },
 
   async deleteCompany(id: string): Promise<void> {
+    if (isApiConfigured) {
+      await apiRequest(`/companies/${id}`, { method: 'DELETE' })
+      return
+    }
     if (live()) {
       const { error } = await supabase!.from('companies').delete().eq('id', id)
       if (error) throw new Error('Não foi possível remover a empresa.')

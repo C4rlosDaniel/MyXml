@@ -57,6 +57,27 @@ def test_admin_password_uses_direct_http(monkeypatch):
     assert chamados[0]["json"]["password"] == "admin123"
 
 
+def test_acesso_empresa_contador(monkeypatch):
+    """Contador só edita empresa da qual é membro; admin pode todas."""
+    from fastapi import HTTPException
+
+    from app.routers import empresas
+
+    monkeypatch.setattr(
+        empresas,
+        "allowed_company_ids",
+        lambda user, client: None if user.get("role") == "admin" else ["co-1"],
+    )
+    empresas._acesso_empresa("co-1", {"role": "contador", "id": "u"}, object())
+    try:
+        empresas._acesso_empresa("co-2", {"role": "contador", "id": "u"}, object())
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("contador não deveria acessar empresa alheia")
+    empresas._acesso_empresa("co-2", {"role": "admin", "id": "u"}, object())
+
+
 def test_maybe_data_none():
     """maybe_single().execute() devolve None quando não há linha (sem .data)."""
     from app.services.supabase_client import maybe_data

@@ -104,13 +104,19 @@ export function CompaniesPage() {
       showError('Dados incompletos', 'Valide o certificado ou preencha o CNPJ e a razão social.')
       return
     }
-    const saved = await cadastrosService.saveCompany({
-      id: editingId ?? crypto.randomUUID(),
-      cnpj: onlyDigits(form.cnpj),
-      razaoSocial: form.razaoSocial,
-      nomeExibicao: form.nomeExibicao || form.razaoSocial,
-      certValidade: form.certValidade,
-    })
+    let saved
+    try {
+      saved = await cadastrosService.saveCompany({
+        id: editingId ?? crypto.randomUUID(),
+        cnpj: onlyDigits(form.cnpj),
+        razaoSocial: form.razaoSocial,
+        nomeExibicao: form.nomeExibicao || form.razaoSocial,
+        certValidade: form.certValidade,
+      }, editingId === null)
+    } catch (err) {
+      showError('Não foi possível salvar a empresa', err instanceof Error ? err.message : undefined)
+      return
+    }
 
     if (isApiConfigured && certFile && password.trim()) {
       try {
@@ -129,11 +135,15 @@ export function CompaniesPage() {
 
   const confirmDelete = async () => {
     if (!deleting) return
-    await cadastrosService.deleteCompany(deleting.id)
-    success('Empresa removida.')
-    setDeleting(null)
-    await refresh()
-    await refreshCompanies()
+    try {
+      await cadastrosService.deleteCompany(deleting.id)
+      success('Empresa removida.')
+      setDeleting(null)
+      await refresh()
+      await refreshCompanies()
+    } catch (err) {
+      showError('Não foi possível remover a empresa', err instanceof Error ? err.message : undefined)
+    }
   }
 
   const columns: Column<CompanyRecord>[] = [

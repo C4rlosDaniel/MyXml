@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.config import settings
-from app.security import admin_required, get_current_user
+from app.security import get_current_user
 from app.services import certificate_vault
 from app.services.access import allowed_company_ids
 from app.services.supabase_client import get_supabase_admin, maybe_data
@@ -91,11 +91,12 @@ async def enviar_certificado(
     company_id: str,
     arquivo: UploadFile = File(...),
     senha: str = Form(...),
-    _user: dict = Depends(get_current_user),
+    user: dict = Depends(get_current_user),
 ) -> dict:
     """Valida o .pfx no servidor e guarda pfx+senha criptografados no cofre."""
     _guard()
     client = get_supabase_admin()
+    _acesso_empresa(company_id, user, client)
     exists = maybe_data(
         client.from_("companies").select("id").eq("id", company_id).maybe_single().execute()
     )
@@ -127,20 +128,29 @@ async def enviar_certificado(
 
 
 @router.get("/{company_id}/certificate")
-def status_certificado(company_id: str, _user: dict = Depends(get_current_user)) -> dict:
+def status_certificado(company_id: str, user: dict = Depends(get_current_user)) -> dict:
     _guard()
+    _acesso_empresa(company_id, user, get_supabase_admin())
     dados = certificate_vault.info(company_id)
     return {"cadastrado": dados is not None, **(dados or {})}
+
+
+def _acesso_empresa(company_id: str, user: dict, client) -> None:
+    """Admin vê tudo; contador só empresa da qual é membro."""
+    ids = allowed_company_ids(user, client)
+    if ids is not None and company_id not in ids:
+        raise HTTPException(status_code=403, detail="Sem acesso a esta empresa.")
 
 
 @router.patch("/{company_id}")
 def atualizar_empresa(
     company_id: str,
     payload: dict,
-    _admin: dict = Depends(admin_required),
+    user: dict = Depends(get_current_user),
 ) -> dict:
     _guard()
     client = get_supabase_admin()
+    _acesso_empresa(company_id, user, client)
     allowed = {k: v for k, v in payload.items() if k in {"cnpj", "razao_social", "nome_exibicao", "cert_validade"}}
     if not allowed:
         raise HTTPException(status_code=422, detail="Nenhum campo válido informado.")
@@ -151,9 +161,10 @@ def atualizar_empresa(
 
 
 @router.delete("/{company_id}")
-def excluir_empresa(company_id: str, _admin: dict = Depends(admin_required)) -> dict:
+def excluir_empresa(company_id: str, user: dict = Depends(get_current_user)) -> dict:
     _guard()
     client = get_supabase_admin()
+    _acesso_empresa(company_id, user, client)
     response = client.from_("companies").delete().eq("id", company_id).execute()
     if not response.data:
         raise HTTPException(status_code=404, detail="Empresa não encontrada.")
