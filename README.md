@@ -80,7 +80,7 @@ A integração com Supabase e SEFAZ está preparada nos serviços e na API.
 
 ## Deploy
 
-- Front: **https://myfly-rho.vercel.app** (URL do projeto criado na Vercel)
+- Front: **https://myxml-app.vercel.app** (URL do projeto na Vercel)
 - API: **https://myxml.fly.dev/health** → `{"status":"ok","mode":"live"}`
 - `web/vercel.json` configura Vite + rewrites de SPA. Variáveis `VITE_*` já
   apontam para a API na Fly, com `VITE_FORCE_MOCK=false`.
