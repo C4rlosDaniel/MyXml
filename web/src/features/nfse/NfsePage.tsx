@@ -98,7 +98,10 @@ export function NfsePage() {
       return
     }
     if (!habilitado) {
-      info('Módulo NFS-e em preparação.', 'Em breve você poderá baixar suas notas de serviço por aqui.')
+      info(
+        'Consulta indisponível.',
+        'O download de NFS-e ainda não está liberado para esta empresa.',
+      )
       return
     }
 
@@ -277,13 +280,13 @@ export function NfsePage() {
       </header>
 
       {!habilitado && (
-        <div className="mb-5 flex items-start gap-3 rounded-sm border border-warning-border bg-warning-soft p-4">
-          <Info className="mt-0.5 h-5 w-5 shrink-0 text-warning-fg" />
+        <div className="mb-5 flex items-start gap-3 rounded-sm border border-line bg-subtle p-4">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-txt-muted" />
           <div className="text-sm text-txt-secondary">
-            <p className="font-semibold text-warning-fg">Em breve</p>
+            <p className="font-semibold text-txt-primary">Consulta indisponível</p>
             <p className="mt-1">
-              Estamos preparando a consulta das notas de serviço. Você poderá baixar e consultar
-              as NFS-e emitidas e recebidas diretamente por aqui.
+              O download de NFS-e ainda não está liberado para esta empresa. Assim que estiver,
+              os XMLs aparecerão aqui.
             </p>
           </div>
         </div>
