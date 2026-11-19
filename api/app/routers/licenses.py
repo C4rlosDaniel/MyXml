@@ -183,7 +183,12 @@ async def apagar_usuario(
         raise HTTPException(status_code=400, detail="Você não pode apagar o próprio usuário.")
 
     client.auth.admin.delete_user(user_id)
-    # O cascade do FK remove profiles/licenças; a limpeza abaixo cobre o cofre de senha.
-    password_vault.delete(license_id)
-    client.from_("licenses").delete().eq("id", license_id).execute()
+    # O cascade do FK remove profiles/licenças. A limpeza abaixo é best-effort:
+    # se algo falhar aqui, o usuário JÁ foi removido e não devemos devolver erro
+    # (foi o que fazia o front reclamar enquanto o usuário já estava apagado).
+    try:
+        password_vault.delete(license_id)
+        client.from_("licenses").delete().eq("id", license_id).execute()
+    except Exception as exc:  # noqa: BLE001 - limpeza auxiliar
+        logger.warning("falha na limpeza após excluir o usuário %s: %s", user_id, exc)
     return {"message": "Usuário removido do sistema."}
